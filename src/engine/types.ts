@@ -11,6 +11,7 @@ export interface Project {
   groupName: string; // the section heading on the page
   label?: string; // cassette label of a flagship: RECON, RAG, MCP
   tag?: string; // release tag, such as v1.1.0
+  ref?: string; // where the page's numbers are quoted from: the tag, or a short commit
 }
 
 // What the engine gives a scene.

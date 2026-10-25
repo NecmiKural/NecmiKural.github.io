@@ -19,9 +19,9 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 - rendering on demand (`src/engine/loop.ts`), reduced motion (every tween snaps), low power (pixel ratio 1, no outlines, no antialiasing at the next power on);
 - the sound engine (`src/engine/sound.ts`), the WebGL and context-loss fallbacks, and teardown.
 
-A scene implements `Scene` in `src/engine/types.ts` (`build`, `layout`, `focus`, `insert`, `eject`, `dispose`), lives in `src/scenes/<id>.ts` and is listed in `SCENES` in `boot.ts`. Each scene is its own chunk; the choice is kept in `localStorage` as `nk.scene`.
+A scene implements `Scene` in `src/engine/types.ts` (`build`, `layout`, `focus`, `insert`, `eject`, `dispose`), lives in `src/scenes/<id>.ts` and is listed in `SCENES` in `boot.ts`. Each scene is its own chunk; the choice is kept in `localStorage` as `nk.scene`. Helpers the scenes share (toon materials, outlines, atlas planes, the camera fit, group colours) are in `src/engine/kit.ts`. The 3D tests run once for every file in `src/scenes`, and `check-size` budgets each scene.
 
-Order: Replay Deck (default, this sheet), then Switchboard, Glovebox and Signal Box, each on its own branch and merged only when every test passes.
+Order: Replay Deck (default), Switchboard (26 October 2026), then Glovebox and Signal Box, each on its own branch and merged only when every test passes.
 
 ## Replay Deck (26 October 2026)
 
@@ -60,12 +60,45 @@ Colour pairings kept away from because known makers use them: red with white, gr
 
 Review rule: no rising two-note square chime of a fourth or an octave, no melody from any game or show, no motif longer than 4 notes.
 
+## Switchboard (26 October 2026)
+
+**Idea.** An MCP server works like a switchboard: it connects a model to one tool at a time, and a person decides which calls go through. Each project is a socket on a jack field. Choosing one plugs a cord into it, the line lamp lights, the key throws and a ticket prints with the project's tag or commit and the date.
+
+**Scene.** A plain wooden cabinet on a desk with a black face: the jack field, one row per group (flagships on top), each row centred. Every socket has a brass rim, a lamp above it and a paper designation strip below with a band in the group colour. In front, a key shelf with two plugs in their seats, three lever keys (LINE, RING, TICKET) and a small ticket printer. The camera never moves; the whole panel is taller than wide, so it fills portrait screens, and wide screens frame the same panel.
+
+**Ticket.** The line number, the title, where the page's numbers are quoted from (the tag, or a short commit) and the date the ticket printed, which is the visitor's date, not a release date.
+
+| Element | Colour |
+|---|---|
+| Cabinet (dark wood) | #4A3426 |
+| Face, plugs, keys, printer (bakelite) | #1B1B1B |
+| Socket rims, key bases (brass) | #C9A227 |
+| Line lamps | #FFB000 |
+| Ticket and designation strips (paper) | #F3EEDF |
+| Focus ring | #F3EEDF |
+
+Kept away from: a cabinet in the shape of a known maker's board, logos or nameplates, a headset, a dial or a handset. The panel is a plain box with no crest or ornament.
+
+**Motion.** Focus puts a ring round the socket. Plugging in takes about 1 s: the plug rises from its seat and travels along a curve into the socket (560 ms) while the cord is rebuilt along its path every frame, then the lamp lights, the key throws (100 ms) and the ticket feeds out (380 ms). Eject reverses it in about 0.4 s. A second Enter skips to the end; with reduced motion every step is a cut. Low power draws the cord with fewer segments and no cabinet outline.
+
+**Sound.** Off by default; at most 4 tones per motif.
+
+| Event | Voices |
+|---|---|
+| Plug in | noise 20 ms at 4 kHz; square 2 kHz, 20 ms |
+| Line buzz | square 120 Hz, 120 ms |
+| Key | noise 50 ms at 500 Hz; triangle 110 Hz, 80 ms |
+| Ring | triangle 523 Hz, then 659 Hz: two short notes, not a ringing tone |
+| Printer | four noise ticks at 3 kHz, 80 ms apart |
+| Unplug | triangle 400 to 200 Hz, 100 ms; noise 30 ms |
+
 ## "Who is this?" test
 
-Show 5 people the deck and the open panel (the `deck-*.png` and `panel-*.png` screenshots in the CI `reports` artifact) and ask: "Does this remind you of any product, character or game?" If anyone names one, change the silhouette or the palette and test again. Write the answers here in general terms; if someone names something, write "named a product" or "named a character" and keep the name out of this file.
+Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-dark.png` and `<scene>-panel-*.png` screenshots in the CI `reports` artifact) and ask: "Does this remind you of any product, character or game?" If anyone names one, change the silhouette or the palette and test again. Write the answers here in general terms; if someone names something, write "named a product" or "named a character" and keep the name out of this file.
 
 | Date | Scene | Asked | Answers | Change |
 |---|---|---|---|---|
 | 26 October 2026 | Replay Deck | 0 of 5 | Pending: asked Necmi to run the test | None yet |
+| 26 October 2026 | Switchboard | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 
-The scene is not final until 5 people have answered with no recognitions.
+A scene is not final until 5 people have answered with no recognitions.
