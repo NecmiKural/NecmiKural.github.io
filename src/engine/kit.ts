@@ -5,6 +5,7 @@ import {
   BackSide,
   Box3,
   DataTexture,
+  InstancedMesh,
   Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
@@ -95,11 +96,27 @@ export function fit(camera: PerspectiveCamera, boxes: Box3[], aspect: number, vi
   camera.updateProjectionMatrix();
 }
 
+// The bounds of what is drawn. Invisible helpers (pick targets, a hidden cord or ring) do not count,
+// unlike Box3.setFromObject.
+export function drawnBox(root: Object3D): Box3 {
+  root.updateWorldMatrix(true, true);
+  const box = new Box3();
+  root.traverseVisible((o) => {
+    if (!(o instanceof Mesh)) return;
+    if (o instanceof InstancedMesh) o.computeBoundingBox();
+    else o.geometry.computeBoundingBox();
+    const local = o instanceof InstancedMesh ? o.boundingBox : o.geometry.boundingBox;
+    if (local && !local.isEmpty()) box.union(local.clone().applyMatrix4(o.matrixWorld));
+  });
+  return box;
+}
+
 // Frees every geometry, material and texture under the root, plus any extra resources.
 export function disposeAll(root: Object3D, extra: { dispose(): void }[]): void {
   const owned = new Set<{ dispose(): void }>(extra);
   root.traverse((o) => {
     if (!(o instanceof Mesh)) return;
+    if (o instanceof InstancedMesh) owned.add(o); // frees its instance buffers
     owned.add(o.geometry);
     for (const m of [o.material].flat() as Material[]) owned.add(m);
   });

@@ -17,10 +17,13 @@ const bar = (page: Page, name: string) => page.locator("#deck .bar").getByRole("
 const frames = async (page: Page) => Number(await page.locator("#deck canvas").getAttribute("data-frames"));
 const held = (page: Page) => page.locator("#deck canvas"); // data-held: the project the scene holds
 
-async function powerOn(page: Page) {
+// With a scene id, also checks that this scene is the one running: a scene that fails to load or
+// is not registered falls back to the default, which would otherwise pass its tests.
+async function powerOn(page: Page, scene?: string) {
   await page.goto("/");
   await page.locator("#power").click();
   await expect(page.locator("#deck [role=status]")).toHaveText(/3D mode on/); // the scene is built
+  if (scene) await expect(page.locator(`#deck .scenes button[data-scene="${scene}"]`)).toHaveAttribute("aria-pressed", "true");
 }
 
 // Opens the focused rail button's project and closes it again.
@@ -115,7 +118,7 @@ for (const scene of SCENES) {
       test.setTimeout(120_000);
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
-      await powerOn(page);
+      await powerOn(page, scene);
       for (const [i, p] of data.projects.entries()) {
         if (i > 0) await page.keyboard.press("ArrowDown");
         await expect(rail(page, p.id)).toBeFocused();
@@ -136,7 +139,7 @@ for (const scene of SCENES) {
     });
 
     test("quick presses settle on the last project chosen, with nothing left running", async ({ page }) => {
-      await powerOn(page);
+      await powerOn(page, scene);
       // Records every change of the held project while the panel is open: nothing may load or eject
       // behind it.
       await page.evaluate(() => {
@@ -166,7 +169,7 @@ for (const scene of SCENES) {
     });
 
     test("a second Enter skips the loading animation to the end", async ({ page }) => {
-      await powerOn(page);
+      await powerOn(page, scene);
       await page.evaluate(() => {
         const w = window as unknown as { t0?: number; t1?: number };
         const panel = document.getElementById("panel") as HTMLDialogElement;
@@ -191,13 +194,14 @@ for (const scene of SCENES) {
       page.on("request", (r) => requests.push(r.url()));
       await page.locator("#power").click();
       await expect(page.locator("#deck [role=status]")).toHaveText(/3D mode on/);
+      await expect(page.locator(`#deck .scenes button[data-scene="${scene}"]`)).toHaveAttribute("aria-pressed", "true");
       expect(requests.length).toBeGreaterThan(0);
       expect(requests.filter((u) => /\.(glb|gltf|png|jpe?g|webp|ktx2|woff2?)$/i.test(new URL(u).pathname))).toEqual([]);
       expect(requests.filter((u) => !u.startsWith(baseURL as string))).toEqual([]);
     });
 
     test("renders on demand: no frames while idle", async ({ page }) => {
-      await powerOn(page);
+      await powerOn(page, scene);
       await expect.poll(() => frames(page)).toBeGreaterThan(0);
       await page.waitForTimeout(500); // the first highlight settles
       const idle = await frames(page);
@@ -216,7 +220,7 @@ for (const scene of SCENES) {
       test.use({ reducedMotion: "reduce" });
 
       test("a project opens at once, without animation", async ({ page }) => {
-        await powerOn(page);
+        await powerOn(page, scene);
         await page.evaluate(() => {
           const w = window as unknown as { t0?: number; t1?: number };
           const panel = document.getElementById("panel") as HTMLDialogElement;
@@ -251,19 +255,57 @@ for (const scene of SCENES) {
       });
       const made = () => page.evaluate(() => (window as unknown as { made: number }).made);
       const sound = page.locator("#deck .bar").getByRole("button", { name: "Sound" });
-      await powerOn(page);
+      await powerOn(page, scene);
       await expect(sound).toHaveAttribute("aria-pressed", "false");
       await openAndClose(page);
       expect(await made()).toBe(0);
       await sound.click();
       await expect(sound).toHaveAttribute("aria-pressed", "true");
       expect(await made()).toBe(1);
-      await powerOn(page);
+      await powerOn(page, scene);
       await expect(sound).toHaveAttribute("aria-pressed", "true");
     });
 
+    test("the pointer: a project under the cursor shows a pointer, and a click opens it", async ({ page }) => {
+      await powerOn(page, scene);
+      const canvas = page.locator("#deck canvas");
+      const box = (await canvas.boundingBox()) as { x: number; y: number; width: number; height: number };
+      let hit: { x: number; y: number } | null = null;
+      for (let gy = 1; gy < 12 && !hit; gy++) {
+        for (let gx = 1; gx < 16 && !hit; gx++) {
+          const x = box.x + (box.width * gx) / 16;
+          const y = box.y + (box.height * gy) / 12;
+          await page.mouse.move(x, y);
+          if ((await canvas.evaluate((c) => (c as HTMLElement).style.cursor)) === "pointer") hit = { x, y };
+        }
+      }
+      expect(hit, "no project under any point of a 15 x 11 grid").not.toBeNull();
+      const { x, y } = hit as { x: number; y: number };
+      await page.mouse.click(x, y);
+      await expect(page.locator("#panel-title")).toBeFocused();
+      const id = await held(page).getAttribute("data-held");
+      const project = data.projects.find((p) => p.id === id);
+      expect(project, `held ${id}`).toBeDefined();
+      await expect(page.locator("#panel-title")).toHaveAccessibleName((project as { title: string }).title);
+    });
+
+    test("low power: toggling it keeps the scene working", async ({ page }) => {
+      const errors: string[] = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      await powerOn(page, scene);
+      const low = bar(page, "Low power");
+      const before = await low.getAttribute("aria-pressed");
+      await low.click();
+      await expect(low).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
+      await rail(page, ids[0]).focus();
+      await openAndClose(page);
+      await low.click(); // and back, with the project ejected
+      await expect(held(page)).toHaveAttribute("data-held", "");
+      expect(errors).toEqual([]);
+    });
+
     test("a lost graphics context powers off and says why", async ({ page }) => {
-      await powerOn(page);
+      await powerOn(page, scene);
       await page.evaluate(() =>
         (document.querySelector("#deck canvas") as HTMLCanvasElement)
           .getContext("webgl2")
@@ -278,7 +320,7 @@ for (const scene of SCENES) {
     for (const colorScheme of ["light", "dark"] as const) {
       test(`${colorScheme}: no axe violations with the deck open and with a project open`, async ({ page }, info) => {
         await page.emulateMedia({ colorScheme });
-        await powerOn(page);
+        await powerOn(page, scene);
         const scan = async () =>
           (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze())
             .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(", ")}`);

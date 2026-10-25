@@ -6,6 +6,7 @@
 import {
   Box3,
   BoxGeometry,
+  BufferGeometry,
   CanvasTexture,
   CatmullRomCurve3,
   CircleGeometry,
@@ -30,7 +31,7 @@ import {
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { drawText, mark, wrap } from "../engine/font.ts";
-import { atlasPlane, disposeAll, fit, GROUP_COLOURS, outline, toonMaker, type Rect } from "../engine/kit.ts";
+import { atlasPlane, disposeAll, drawnBox, fit, GROUP_COLOURS, outline, toonMaker, type Rect } from "../engine/kit.ts";
 import { easeInOut, linear } from "../engine/loop.ts";
 import type { Motif } from "../engine/sound.ts";
 import type { CreateScene, Project } from "../engine/types.ts";
@@ -179,8 +180,9 @@ export const create: CreateScene = (stage) => {
   content.add(shelf, keyBases, keyLabels, ...keys, seats, ...plugs, printer, slot, ticket);
 
   // One cord, rebuilt along its curve while the plug moves.
-  const cord = new Mesh(new TubeGeometry(), bakelite);
+  const cord = new Mesh(new BufferGeometry(), bakelite); // empty until the plug first moves
   cord.visible = false;
+  cord.raycast = () => {}; // a click on a cord reaches the socket behind it
   content.add(cord);
   const cordCurve = () => {
     const plug = plugs[0];
@@ -265,9 +267,9 @@ export const create: CreateScene = (stage) => {
       const groups = [...new Set(projects.map((p) => p.group))];
       const rows = groups.map((g) => projects.filter((p) => p.group === g));
       const cols = Math.max(...rows.map((r) => r.length));
-      const width = cols * PITCH + 0.9;
-      const height = SHELF.h + 0.2 + groups.length * ROW + 0.6;
-      const topRow = height - 0.6;
+      const width = Math.max(cols * PITCH + 0.9, 4.2); // room for the seats, keys and printer
+      const height = SHELF.h + 0.2 + groups.length * ROW + 0.85;
+      const topRow = height - 0.85; // the face ends 0.22 below the cabinet top
 
       const cabinet = new Mesh(new RoundedBoxGeometry(width, height, 0.9, 2, 0.06), wood);
       cabinet.position.set(0, height / 2, -0.45);
@@ -333,7 +335,7 @@ export const create: CreateScene = (stage) => {
         new Vector3(PRINTER.x, TICKET_OUT, TICKET.z),
         new Vector3(TICKET.w, TICKET.h, 0.02),
       );
-      fit(camera, [new Box3().setFromObject(content), printed], aspect, VIEW);
+      fit(camera, [drawnBox(content), printed], aspect, VIEW);
       stage.invalidate();
     },
 
