@@ -1,7 +1,6 @@
-// The only script on page load. It shows the "Power on" row and, on click, checks for WebGL 2
-// and loads 3D mode. Without a click it downloads nothing else and changes nothing.
+// The only script on page load. On a click of "Power on" it checks for WebGL 2 and loads 3D mode.
+// Without a click it downloads nothing else and changes nothing.
 
-const row = document.getElementById("power-row");
 const power = document.getElementById("power");
 const line = document.getElementById("power-status");
 
@@ -13,12 +12,11 @@ const pref = (key: string): string | null => {
   }
 };
 
-if (row && power instanceof HTMLButtonElement && line) {
+if (power instanceof HTMLButtonElement && line) {
   const say = (text: string) => {
     line.textContent = text;
   };
   let busy = false;
-  row.hidden = false;
   power.addEventListener("click", async () => {
     if (busy) return;
     say("");
