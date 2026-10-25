@@ -101,10 +101,14 @@ export function createSound() {
       return on;
     },
     play(motif: Motif) {
-      const c = wake();
-      if (!c) return;
-      const t = c.currentTime + 0.01;
-      for (const v of motif) voice(c, v, t + (v.at ?? 0));
+      try {
+        const c = wake();
+        if (!c) return;
+        const t = c.currentTime + 0.01;
+        for (const v of motif) voice(c, v, t + (v.at ?? 0));
+      } catch {
+        // Sound is optional: a browser that refuses Web Audio leaves 3D mode silent, not broken.
+      }
     },
     toggle(): boolean {
       on = !on;

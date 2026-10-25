@@ -67,6 +67,10 @@ function readProjects(): Project[] {
 }
 
 export async function boot(o: BootOptions): Promise<void> {
+  if (o.gl.isContextLost()) {
+    o.say(LOST); // lost while this chunk was downloading
+    return;
+  }
   if (!document.getElementById("deck-css")) document.head.append(el("style", { id: "deck-css" }, css));
   const projects = readProjects();
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -132,12 +136,13 @@ export async function boot(o: BootOptions): Promise<void> {
   const renderer = new WebGLRenderer({ canvas: o.canvas, context: o.gl, antialias: !lowPower });
   let frames = 0;
   const loop = createLoop(
-    guard(() => {
+    () => {
       if (!scene) return;
       renderer.render(scene.world, scene.camera);
       o.canvas.dataset.frames = String(++frames);
-    }),
+    },
     reduced,
+    () => fail(BROKEN),
   );
   const stage: Stage = {
     invalidate: loop.invalidate,
@@ -163,6 +168,10 @@ export async function boot(o: BootOptions): Promise<void> {
   let inWell: string | null = null; // the project the scene holds
   let shown: string | null = null; // the project in the panel
   let highlighted: string | null = null;
+  const hold = (id: string | null) => {
+    inWell = id;
+    o.canvas.dataset.held = id ?? ""; // for the tests, like data-frames
+  };
   const run = async (task: () => Promise<void>) => {
     while (running) {
       loop.skip(true);
@@ -183,7 +192,7 @@ export async function boot(o: BootOptions): Promise<void> {
     const { create } = await entry.load();
     if (closed) return;
     scene?.dispose();
-    inWell = null;
+    hold(null);
     scene = create(stage);
     scene.build(projects);
     scene.focus(highlighted);
@@ -217,9 +226,9 @@ export async function boot(o: BootOptions): Promise<void> {
     }
     target = id;
     await run(async () => {
-      if (inWell === id) return;
+      if (target !== id || inWell === id) return; // superseded while queued, or already loaded
       if (inWell) await s.eject();
-      inWell = id;
+      hold(id);
       await s.insert(id);
     });
     if (target === id && !closed && !panel.open && scene === s) openPanel(id);
@@ -287,7 +296,7 @@ export async function boot(o: BootOptions): Promise<void> {
       Home: 0,
       End: buttons.length - 1,
     };
-    if (i < 0 || !(e.key in moves)) return;
+    if (i < 0 || !(e.key in moves) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     e.preventDefault();
     buttons[Math.max(0, Math.min(buttons.length - 1, moves[e.key]))].focus();
   });
@@ -313,7 +322,7 @@ export async function boot(o: BootOptions): Promise<void> {
       await run(async () => {
         if (inWell !== id || panel.open) return;
         await scene?.eject();
-        inWell = null;
+        hold(null);
       });
     }),
   );
@@ -337,8 +346,8 @@ export async function boot(o: BootOptions): Promise<void> {
       guard(async () => {
         const id = b.dataset.scene as string;
         if (b.getAttribute("aria-pressed") === "true") return;
-        write("nk.scene", id);
         await run(() => show(id));
+        write("nk.scene", id); // only once it has loaded, so a broken scene is not remembered
       }),
     );
   }
@@ -370,9 +379,9 @@ export async function boot(o: BootOptions): Promise<void> {
   deck.showModal();
   buttons[0]?.focus();
   observer.observe(o.canvas);
-  sound.play(POWER_ON);
   try {
-    await show(read("nk.scene") ?? SCENES[0].id);
+    sound.play(POWER_ON);
+    await show(read("nk.scene") ?? SCENES[0].id).catch(() => show(SCENES[0].id));
     live.textContent = `3D mode on: ${projects.length} projects.`;
   } catch {
     fail(BROKEN);

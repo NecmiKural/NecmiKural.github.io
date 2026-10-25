@@ -5,7 +5,7 @@ export const easeOut = (t: number) => 1 - (1 - t) ** 3;
 export const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
 export const linear = (t: number) => t;
 
-export function createLoop(render: () => void, reduced: boolean) {
+export function createLoop(render: () => void, reduced: boolean, onError: () => void) {
   const tasks = new Set<(now: number) => boolean>();
   let dirty = false;
   let raf = 0;
@@ -14,10 +14,16 @@ export function createLoop(render: () => void, reduced: boolean) {
 
   const frame = (now: number) => {
     raf = 0;
-    for (const task of [...tasks]) if (task(now)) tasks.delete(task);
-    if (dirty) {
-      dirty = false;
-      render();
+    try {
+      for (const task of [...tasks]) if (task(now)) tasks.delete(task);
+      if (dirty) {
+        dirty = false;
+        render();
+      }
+    } catch {
+      tasks.clear();
+      onError(); // a scene or renderer error powers off instead of freezing mid-animation
+      return;
     }
     if (tasks.size) raf = requestAnimationFrame(frame);
   };

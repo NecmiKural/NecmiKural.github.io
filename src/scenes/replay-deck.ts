@@ -81,13 +81,14 @@ const EJECT: Motif = [
   { noise: 1200, dur: 0.04 },
 ];
 
-// The label atlas: one 1024 px canvas, cut into 256x160 cells, one per cassette, and 256x32
-// strips for the shelf and deck labels.
+// The label atlas: one 1024 px canvas, cut into 24 cells of 256x160. Cassettes take the first
+// cells; the last two hold 32 px strips for the shelf names and the deck's face labels.
 const ATLAS = 1024;
+const TAPES_MAX = 22;
 type Rect = readonly [x: number, y: number, w: number, h: number];
 const cell = (i: number): Rect => [(i % 4) * 256, Math.floor(i / 4) * 160, 256, 160];
-const strip = (i: number, row: number): Rect => [cell(i)[0], cell(i)[1] + row * 32, 256, 32];
-const label = (row: number): Rect => [cell(14)[0] + 48, cell(14)[1] + row * 32, 160, 32]; // deck face labels
+const shelfStrip = (row: number): Rect => [cell(22)[0], cell(22)[1] + row * 32, 256, 32];
+const label = (row: number): Rect => [cell(23)[0] + 48, cell(23)[1] + row * 32, 160, 32]; // deck face labels
 
 // A plane that shows one rectangle of the atlas.
 function face(w: number, h: number, [x, y, rw, rh]: Rect): BufferGeometry {
@@ -99,15 +100,14 @@ function face(w: number, h: number, [x, y, rw, rh]: Rect): BufferGeometry {
   return g;
 }
 
-// Frames the objects' bounding-box corners from the fixed viewing direction, as tight as the
-// aspect allows. A few passes re-centre the target on what the camera actually sees.
-function fit(camera: PerspectiveCamera, objects: Object3D[], aspect: number): void {
-  const corners = objects.flatMap((o) => {
-    const box = new Box3().setFromObject(o);
-    return [0, 1, 2, 3, 4, 5, 6, 7].map(
+// Frames the boxes' corners from the fixed viewing direction, as tight as the aspect allows.
+// A few passes re-centre the target on what the camera actually sees.
+function fit(camera: PerspectiveCamera, boxes: Box3[], aspect: number): void {
+  const corners = boxes.flatMap((box) =>
+    [0, 1, 2, 3, 4, 5, 6, 7].map(
       (i) => new Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z),
-    );
-  });
+    ),
+  );
   const target = new Box3().setFromPoints(corners).getCenter(new Vector3());
   const tanV = Math.tan((camera.fov * Math.PI) / 360);
   const tanH = tanV * aspect;
@@ -320,6 +320,7 @@ export const create: CreateScene = (stage) => {
     camera,
 
     build(projects) {
+      if (projects.length > TAPES_MAX) throw new Error(`the label atlas holds ${TAPES_MAX} cassettes`);
       const groups = [...new Set(projects.map((p) => p.group))];
       const rows = groups.map((g) => projects.filter((p) => p.group === g));
       const cols = Math.max(...rows.map((r) => r.length));
@@ -336,9 +337,9 @@ export const create: CreateScene = (stage) => {
         ...groups.map((_, row) => new BoxGeometry(rackW, 0.22, RACK_D).translate(0, shelfTop(row) - 0.11, 0)),
       ];
       const names = groups.map((g, row) => {
-        const [x, y] = strip(13, row);
+        const [x, y] = shelfStrip(row);
         drawText(a, shelfName(g), x + 6, y + 5, 3, PAPER);
-        return face(1.6, 0.2, strip(13, row)).translate(-rackW / 2 + 0.9, shelfTop(row) - 0.11, RACK_D / 2 + 0.003);
+        return face(1.6, 0.2, shelfStrip(row)).translate(-rackW / 2 + 0.9, shelfTop(row) - 0.11, RACK_D / 2 + 0.003);
       });
       const shadow = new Mesh(new PlaneGeometry(rackW + 0.6, RACK_D + 0.5), flat("#1d1e1b"));
       shadow.rotation.x = -Math.PI / 2;
@@ -408,7 +409,9 @@ export const create: CreateScene = (stage) => {
       deckOutline.visible = !stage.lowPower;
       showRing();
       world.updateMatrixWorld();
-      fit(camera, [rack, deck], aspect);
+      // The rack, the deck and the top of a cassette's flight, so a load never leaves the view.
+      const apex = new Box3().setFromCenterAndSize(above(), new Vector3(TAPE.w, TAPE.h, TAPE.w));
+      fit(camera, [new Box3().setFromObject(rack), new Box3().setFromObject(deck), apex], aspect);
       stage.invalidate();
     },
 

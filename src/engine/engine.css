@@ -35,10 +35,15 @@ html:has(#deck[open]) { overflow: hidden; }
 }
 #deck .rail button:hover, #deck .rail button:focus-visible { background: #2c2e2a; }
 #deck .rail button:focus-visible { outline-offset: -3px; }
-@media (orientation: portrait) {
+/* Portrait, or too narrow for a rail beside the canvas (such as 400% zoom): stacked. */
+@media (orientation: portrait), (max-width: 40rem) {
   #deck[open] { grid-template: "bar" auto "view" 52dvh "rail" minmax(0, 1fr) / 100%; }
   #deck .rail { border-right: 0; border-top: 1px solid #3a3d35; }
   #deck .hint { display: none; }
+}
+/* High contrast modes drop the fill, so a pressed toggle also gets a thick border and underline. */
+@media (forced-colors: active) {
+  #deck button[aria-pressed="true"] { border-width: 3px; text-decoration: underline; }
 }
 /* Docked on the rail's side, so the scene stays in view while the panel is open. */
 #panel {

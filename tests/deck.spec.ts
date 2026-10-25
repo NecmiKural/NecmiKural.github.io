@@ -10,6 +10,7 @@ const data: Portfolio = JSON.parse(readFileSync("content/portfolio.json", "utf8"
 const ids = data.projects.map((p) => p.id);
 const rail = (page: Page, id: string) => page.locator(`#deck .rail button[data-id="${id}"]`);
 const frames = async (page: Page) => Number(await page.locator("#deck canvas").getAttribute("data-frames"));
+const held = (page: Page) => page.locator("#deck canvas"); // data-held: the project the scene holds
 
 async function powerOn(page: Page) {
   await page.goto("/");
@@ -37,14 +38,66 @@ test("every project opens from the rail by keyboard, and Escape steps back out",
     const title = page.locator("#panel-title");
     await expect(title).toBeFocused();
     await expect(title).toHaveAccessibleName(p.title);
+    await expect(held(page)).toHaveAttribute("data-held", p.id);
     await page.keyboard.press("Escape");
     await expect(page.locator("#panel")).toBeHidden();
     await expect(rail(page, p.id)).toBeFocused();
+    await expect(held(page)).toHaveAttribute("data-held", ""); // ejected back to the rack
   }
   await page.keyboard.press("Escape");
   await expect(page.locator("#deck")).toHaveCount(0);
   await expect(page.locator("#power")).toBeFocused();
   expect(errors).toEqual([]);
+});
+
+test("quick presses settle on the last project chosen, with nothing left running", async ({ page }) => {
+  await powerOn(page);
+  // Records every change of the held project while the panel is open: nothing may load or eject
+  // behind it.
+  await page.evaluate(() => {
+    const w = window as unknown as { behind: string[] };
+    const canvas = document.querySelector("#deck canvas") as HTMLCanvasElement;
+    const panel = document.getElementById("panel") as HTMLDialogElement;
+    w.behind = [];
+    new MutationObserver(() => {
+      if (panel.open) w.behind.push(canvas.dataset.held ?? "");
+    }).observe(canvas, { attributeFilter: ["data-held"] });
+  });
+  await page.keyboard.press("Enter"); // the first project starts loading
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter"); // the second, before the first has finished
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter"); // and the first again
+  const title = page.locator("#panel-title");
+  await expect(title).toBeFocused();
+  await expect(title).toHaveAccessibleName(data.projects[0].title);
+  await expect(held(page)).toHaveAttribute("data-held", ids[0]);
+  await page.waitForTimeout(1500); // anything still queued would have run by now
+  expect(await page.evaluate(() => (window as unknown as { behind: string[] }).behind)).toEqual([]);
+  await expect(page.locator("#panel")).toBeVisible();
+  const settled = await frames(page);
+  await page.waitForTimeout(500);
+  expect(await frames(page)).toBe(settled);
+});
+
+test("a second Enter skips the loading animation to the end", async ({ page }) => {
+  await powerOn(page);
+  await page.evaluate(() => {
+    const w = window as unknown as { t0?: number; t1?: number };
+    const panel = document.getElementById("panel") as HTMLDialogElement;
+    addEventListener("keydown", () => (w.t0 = performance.now()), { capture: true, once: true });
+    new MutationObserver(() => {
+      if (panel.open) w.t1 ??= performance.now();
+    }).observe(panel, { attributes: true });
+  });
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#panel-title")).toBeFocused();
+  const ms = await page.evaluate(() => {
+    const w = window as unknown as { t0: number; t1: number };
+    return w.t1 - w.t0;
+  });
+  expect(ms).toBeLessThan(600); // the full animation takes about 1.1 s
 });
 
 test("focus order: header links, Power on, then the rail; arrows, Home and End move within it", async ({ page }) => {
