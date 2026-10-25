@@ -1,0 +1,7 @@
+node_modules/
+dist/
+public/visuals/
+test-results/
+playwright-report/
+.lighthouseci/
+.private-terms
