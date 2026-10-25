@@ -12,27 +12,22 @@ import {
   CircleGeometry,
   Color,
   CylinderGeometry,
-  DataTexture,
   DirectionalLight,
   Group,
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
-  MeshToonMaterial,
-  NearestFilter,
   Object3D,
   PerspectiveCamera,
   PlaneGeometry,
-  RedFormat,
   Scene as World,
   SRGBColorSpace,
   Vector3,
-  type BufferGeometry,
-  type Material,
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { drawText, mark, wrap } from "../engine/font.ts";
+import { atlasPlane, disposeAll, fit, GROUP_COLOURS, outline, toonMaker, type Rect } from "../engine/kit.ts";
 import { easeInOut, linear } from "../engine/loop.ts";
 import type { Motif } from "../engine/sound.ts";
 import type { CreateScene, Project } from "../engine/types.ts";
@@ -47,12 +42,6 @@ const UNLIT = "#1f2a19";
 const FOCUS = "#f0b54a";
 const PROPOSED = "#ffb000";
 const VERIFIED = "#4cc38a";
-const BAND: Record<string, string> = {
-  flagship: "#e8a33d",
-  software: "#3f7cac",
-  coursework: "#5c9e6e",
-  "open-source": "#9a8fbf",
-};
 
 // World units: a cassette is 1 wide.
 const TAPE = { w: 1, h: 0.64, d: 0.14 };
@@ -85,58 +74,11 @@ const EJECT: Motif = [
 // cells; the last two hold 32 px strips for the shelf names and the deck's face labels.
 const ATLAS = 1024;
 const TAPES_MAX = 22;
-type Rect = readonly [x: number, y: number, w: number, h: number];
 const cell = (i: number): Rect => [(i % 4) * 256, Math.floor(i / 4) * 160, 256, 160];
 const shelfStrip = (row: number): Rect => [cell(22)[0], cell(22)[1] + row * 32, 256, 32];
 const label = (row: number): Rect => [cell(23)[0] + 48, cell(23)[1] + row * 32, 160, 32]; // deck face labels
 
-// A plane that shows one rectangle of the atlas.
-function face(w: number, h: number, [x, y, rw, rh]: Rect): BufferGeometry {
-  const g = new PlaneGeometry(w, h);
-  const uv = g.attributes.uv;
-  for (let i = 0; i < uv.count; i++) {
-    uv.setXY(i, (x + uv.getX(i) * rw) / ATLAS, 1 - (y + (1 - uv.getY(i)) * rh) / ATLAS);
-  }
-  return g;
-}
-
-// Frames the boxes' corners from the fixed viewing direction, as tight as the aspect allows.
-// A few passes re-centre the target on what the camera actually sees.
-function fit(camera: PerspectiveCamera, boxes: Box3[], aspect: number): void {
-  const corners = boxes.flatMap((box) =>
-    [0, 1, 2, 3, 4, 5, 6, 7].map(
-      (i) => new Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z),
-    ),
-  );
-  const target = new Box3().setFromPoints(corners).getCenter(new Vector3());
-  const tanV = Math.tan((camera.fov * Math.PI) / 360);
-  const tanH = tanV * aspect;
-  camera.aspect = aspect;
-  camera.position.copy(target).add(VIEW);
-  camera.lookAt(target);
-  camera.updateMatrixWorld();
-  const right = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-  const up = new Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-  let distance = 0;
-  for (let pass = 0; ; pass++) {
-    const q = corners.map((c) => c.clone().sub(target));
-    distance = Math.max(
-      ...q.map((v) => v.dot(VIEW) + Math.max(Math.abs(v.dot(right)) / tanH, Math.abs(v.dot(up)) / tanV)),
-    );
-    if (pass === 3) break;
-    // Screen position of each corner, -1..1 across the view; then move the target to the middle.
-    const xs = q.map((v) => v.dot(right) / ((distance - v.dot(VIEW)) * tanH));
-    const ys = q.map((v) => v.dot(up) / ((distance - v.dot(VIEW)) * tanV));
-    target
-      .addScaledVector(right, ((Math.min(...xs) + Math.max(...xs)) / 2) * distance * tanH)
-      .addScaledVector(up, ((Math.min(...ys) + Math.max(...ys)) / 2) * distance * tanV);
-  }
-  distance *= 1.04;
-  camera.position.copy(target).addScaledVector(VIEW, distance);
-  camera.near = distance / 20;
-  camera.far = distance * 6;
-  camera.updateProjectionMatrix();
-}
+const face = (w: number, h: number, rect: Rect) => atlasPlane(w, h, rect, ATLAS);
 
 const shelfName = (group: string) => group.toUpperCase().replace("-", " ");
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -150,11 +92,7 @@ export const create: CreateScene = (stage) => {
   sun.position.set(-5, 9, 7);
   world.add(sun);
 
-  // Three-band toon shading, no textures.
-  const bands = new DataTexture(new Uint8Array([60, 140, 255]), 3, 1, RedFormat);
-  bands.minFilter = bands.magFilter = NearestFilter;
-  bands.needsUpdate = true;
-  const toon = (color: string) => new MeshToonMaterial({ color, gradientMap: bands });
+  const { toon, bands } = toonMaker();
   const paper = toon(PAPER);
   const ink = toon(INK);
   const flat = (color: string) => new MeshBasicMaterial({ color });
@@ -184,17 +122,6 @@ export const create: CreateScene = (stage) => {
     [top, bottom].forEach((line, i) => drawText(s, line.slice(0, 15).padEnd(15), 12, 14 + i * 40, 4, PHOSPHOR, UNLIT, 3));
     screen.needsUpdate = true;
     stage.invalidate();
-  };
-
-  // Inverted-hull outline: the mesh again, inside out and a little larger.
-  const outline = (mesh: Mesh, color: string, thickness: number): Mesh => {
-    mesh.geometry.computeBoundingBox();
-    const size = (mesh.geometry.boundingBox as Box3).getSize(new Vector3());
-    const hull = new Mesh(mesh.geometry, new MeshBasicMaterial({ color, side: BackSide }));
-    hull.scale.set(1 + (2 * thickness) / size.x, 1 + (2 * thickness) / size.y, 1 + (2 * thickness) / size.z);
-    hull.raycast = () => {};
-    mesh.add(hull);
-    return hull;
   };
 
   const bench = new Mesh(new BoxGeometry(40, 0.5, 16), toon("#2b2d2a"));
@@ -370,7 +297,7 @@ export const create: CreateScene = (stage) => {
         a.fillRect(x, y, 256, 160);
         a.fillStyle = PAPER;
         a.fillRect(x + 8, y + 8, 240, 100);
-        a.fillStyle = BAND[p.group] ?? RACK;
+        a.fillStyle = GROUP_COLOURS[p.group] ?? RACK;
         a.fillRect(x + 8, y + 8, 240, 12);
         const lines = wrap(p.title, 19);
         if (lines.length > 4) lines.splice(3, Infinity, `${lines[3].slice(0, 17)}..`);
@@ -411,7 +338,7 @@ export const create: CreateScene = (stage) => {
       world.updateMatrixWorld();
       // The rack, the deck and the top of a cassette's flight, so a load never leaves the view.
       const apex = new Box3().setFromCenterAndSize(above(), new Vector3(TAPE.w, TAPE.h, TAPE.w));
-      fit(camera, [new Box3().setFromObject(rack), new Box3().setFromObject(deck), apex], aspect);
+      fit(camera, [new Box3().setFromObject(rack), new Box3().setFromObject(deck), apex], aspect, VIEW);
       stage.invalidate();
     },
 
@@ -513,13 +440,7 @@ export const create: CreateScene = (stage) => {
     },
 
     dispose() {
-      const owned = new Set<{ dispose(): void }>([atlas, screen, bands]);
-      world.traverse((o) => {
-        if (!(o instanceof Mesh)) return;
-        owned.add(o.geometry);
-        for (const m of [o.material].flat() as Material[]) owned.add(m);
-      });
-      for (const x of owned) x.dispose();
+      disposeAll(world, [atlas, screen, bands]);
     },
   };
 };

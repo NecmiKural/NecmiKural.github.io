@@ -11,6 +11,7 @@ import type { CreateScene, Project, Scene, Stage } from "./types.ts";
 // Each scene is its own chunk, loaded when chosen. The first is the default.
 const SCENES: { id: string; name: string; load: () => Promise<{ create: CreateScene }> }[] = [
   { id: "replay-deck", name: "Replay Deck", load: () => import("../scenes/replay-deck.ts") },
+  { id: "switchboard", name: "Switchboard", load: () => import("../scenes/switchboard.ts") },
 ];
 
 const POWER_ON: Motif = [
@@ -54,13 +55,16 @@ function readProjects(): Project[] {
     return [...section.querySelectorAll<HTMLElement>("article[id]")].map((article) => {
       const h3 = article.querySelector("h3");
       const byline = article.querySelector(".byline")?.textContent ?? "";
+      const tag = byline.split(" · ").find((s) => /^v\d+(\.\d+)+$/.test(s));
+      const at = article.querySelector("a.src")?.getAttribute("href")?.match(/\/blob\/([^/]+)\//)?.[1];
       return {
         id: article.id,
         title: (h3?.querySelector("a") ?? h3)?.textContent?.trim() || article.id,
         group,
         groupName,
         label: h3?.querySelector(".tape")?.textContent?.trim() || undefined,
-        tag: byline.split(" · ").find((s) => /^v\d+(\.\d+)+$/.test(s)),
+        tag,
+        ref: tag ?? (at && /^[0-9a-f]{40}$/.test(at) ? at.slice(0, 7) : at),
       };
     });
   });
