@@ -198,6 +198,10 @@ function body(data: Portfolio, sizes: Sizes): string {
     `<p class="headline">${esc(prof.headline)}</p>`,
     `<p>${esc(facts.join(" "))}</p>`,
     `<ul class="links">\n${links.join("\n")}\n</ul>`,
+    // Shown by src/main.ts; without JavaScript it stays hidden.
+    `<div id="power-row" hidden><p><button id="power" type="button">Power on 3D mode</button>` +
+      ` <span class="note">Optional: the same projects as cassettes in a tape deck. Sound stays off unless you turn it on.</span></p>` +
+      `<p id="power-status" class="note" role="status"></p></div>`,
     `<p class="note">${esc(need(prof.provenance, "profile.provenance"))}</p>`,
     "</header>",
     `<main>\n${sections.join("\n")}\n</main>`,

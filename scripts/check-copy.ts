@@ -20,6 +20,8 @@ const BANNED = [
   "production", "injection-proof", "robust", "deployed on aws", "runs on rds", "saves 58%",
   "worse model", "graduated", "seasonal drift", "zero context loss", "passionate", "expert",
   "cutting-edge", "state-of-the-art", "seamless", "world-class", "powerful",
+  // 3D scenes: words that point at a known product, console or character. Names live in PRIVATE_TERMS.
+  "cartridge", "game console", "handheld", "mascot", "fan art",
 ];
 const PII = [/[\w.+-]+@[\w-]+\.[\w.]+/, /\+?\d[\d ()]{8,}\d/];
 const NOT_PII = /https?:\/\/[^\s)"'<>]+|\b[0-9a-f]{40}\b|\bsha\d+-[\w+/=]+/g; // links, SHAs, hashes
@@ -27,6 +29,8 @@ const NOT_PII = /https?:\/\/[^\s)"'<>]+|\b[0-9a-f]{40}\b|\bsha\d+-[\w+/=]+/g; //
 // SVG path data reads as phone numbers, so SVGs skip the PII rule only.
 const PATTERN_FILES = new Set(["scripts/check-copy.ts", "package-lock.json"]);
 const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?)$/i;
+// Built JavaScript is src/ (checked as source) plus the three library, which is not ours to lint.
+const BUNDLED = /^dist\/assets\/.*\.js$/;
 
 const phrase = (p: string) => new RegExp(`(?<!\\w)${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\w)`, "i");
 
@@ -65,7 +69,9 @@ function files(): string[] {
         .filter((d) => d.isFile())
         .map((d) => join(d.parentPath, d.name))
     : [];
-  return [...tracked.split("\n").filter(Boolean), ...built].filter((f) => !BINARY.test(f) && existsSync(f));
+  return [...tracked.split("\n").filter(Boolean), ...built].filter(
+    (f) => !BINARY.test(f) && !BUNDLED.test(f) && existsSync(f),
+  );
 }
 
 function selfTest(): void {
@@ -78,6 +84,7 @@ function selfTest(): void {
   eq(t("a &" + "mdash; b"), ["f:1: em or en dash"]);
   eq(t("ok\nready for Production"), ["f:2: banned phrase 'production'"]);
   eq(t("ask the experts"), []);
+  eq(t("insert the Cartridge"), ["f:1: banned phrase 'cartridge'"]);
   eq(t("mail me at a.b@example.org"), ["f:1: looks like an email address or phone number"]);
   eq(t("call +64 21 555 0199"), ["f:1: looks like an email address or phone number"]);
   eq(t("https://github.com/x/y/blob/0123456789abcdef0123456789abcdef01234567/README.md"), []);

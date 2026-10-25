@@ -37,5 +37,6 @@ function portfolio(): Plugin {
 export default defineConfig({
   base: "./",
   plugins: [portfolio()],
-  build: { modulePreload: { polyfill: false } },
+  // The 3D chunk is budgeted in gzip by scripts/check-size.ts; this only quiets the minified-size warning.
+  build: { modulePreload: { polyfill: false }, chunkSizeWarningLimit: 700 },
 });
