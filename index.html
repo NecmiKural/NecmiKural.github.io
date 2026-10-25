@@ -8,6 +8,8 @@
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141613">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <!--head-->
+<script type="module" src="/src/main.ts"></script>
+<noscript><style>#power-row { display: none; }</style></noscript>
 <style>
 :root {
   --bg: #f6f3ec; --fg: #1e1f1c; --muted: #5b5a52; --link: #1f5f8b; --accent: #9c5b00;
@@ -45,6 +47,13 @@ h3 { font-size: 1.35rem; line-height: 1.25; margin: 0; }
 .src { font-family: var(--mono); font-size: .75rem; white-space: nowrap; }
 .visual { display: block; width: 100%; height: auto; margin: 1rem 0; border: 1px solid var(--rule); border-radius: 6px; }
 .more { margin: .75rem 0 0; }
+#power-row p { margin: 0 0 .5rem; }
+#power {
+  font: inherit; font-weight: 600; color: var(--fg); background: transparent; cursor: pointer;
+  padding: .3rem .9rem; margin-right: .35rem; border: 1px solid var(--fg); border-radius: 999px;
+}
+#power:hover { background: var(--fg); color: var(--bg); }
+#power:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 footer { margin-top: 2rem; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>

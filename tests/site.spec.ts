@@ -23,7 +23,13 @@ test.describe("without JavaScript", () => {
     for (const l of data.links.filter((l) => !isSite(l.url))) {
       await expect(page.locator(`header a[href="${l.url}"]`)).toBeVisible();
     }
+    await expect(page.locator("#power-row")).toBeHidden();
   });
+});
+
+test("with JavaScript, the optional 3D mode is offered", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#power")).toBeVisible();
 });
 
 for (const { width, height } of VIEWPORTS) {

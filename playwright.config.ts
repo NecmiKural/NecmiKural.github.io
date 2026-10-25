@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Tests the built site (npm run build first). Chromium, Firefox and WebKit.
+// Tests the built site (npm run build first). The HTML page in Chromium, Firefox and WebKit;
+// 3D mode in Chromium with WebGL rendered in software, so it runs the same on CI machines without
+// a GPU. (Software rendering cannot capture the tall full-page screenshots, hence two projects.)
+const html = /site\.spec\.ts/;
 export default defineConfig({
   testDir: "tests",
   forbidOnly: !!process.env.CI,
@@ -12,8 +15,16 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   projects: [
-    { name: "chromium", use: devices["Desktop Chrome"] },
-    { name: "firefox", use: devices["Desktop Firefox"] },
-    { name: "webkit", use: devices["Desktop Safari"] },
+    { name: "chromium", testMatch: html, use: devices["Desktop Chrome"] },
+    { name: "firefox", testMatch: html, use: devices["Desktop Firefox"] },
+    { name: "webkit", testMatch: html, use: devices["Desktop Safari"] },
+    {
+      name: "3d",
+      testMatch: /deck\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] },
+      },
+    },
   ],
 });
