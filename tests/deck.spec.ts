@@ -59,7 +59,7 @@ test("focus order: header links, Power on, then the rail; arrows, Home and End m
   await expect(rail(page, ids.at(-2) as string)).toBeFocused();
   // Before the rail, in reverse: the toolbar.
   await page.keyboard.press("Home");
-  for (const name of ["Power off", "Low power", "Sound", "Switchboard", "Replay Deck"]) {
+  for (const name of ["Power off", "Low power", "Sound", "Glovebox", "Switchboard", "Replay Deck"]) {
     await page.keyboard.press("Shift+Tab");
     await expect(bar(page, name)).toBeFocused();
   }
@@ -74,7 +74,8 @@ test("Replay Deck is the default; the switcher loads each scene's chunk on deman
   await powerOn(page);
   await expect(bar(page, "Replay Deck")).toHaveAttribute("aria-pressed", "true");
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "false");
-  expect(chunks.filter((c) => c.includes("/switchboard-"))).toEqual([]);
+  const others = SCENES.filter((s) => s !== "replay-deck");
+  expect(chunks.filter((c) => others.some((s) => c.includes(`/${s}-`)))).toEqual([]); // nothing loads unasked
   const before = await frames(page);
   await bar(page, "Switchboard").click();
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "true");
@@ -209,7 +210,8 @@ for (const scene of SCENES) {
       expect(await frames(page)).toBe(idle);
       await openAndClose(page);
       await expect(rail(page, ids[0])).toBeFocused();
-      await page.waitForTimeout(1000); // the eject settles
+      await expect(held(page)).toHaveAttribute("data-held", ""); // the eject has finished
+      await page.waitForTimeout(300); // and the highlight that follows it
       const after = await frames(page);
       expect(after).toBeGreaterThan(idle);
       await page.waitForTimeout(1000);

@@ -21,7 +21,7 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 
 A scene implements `Scene` in `src/engine/types.ts` (`build`, `layout`, `focus`, `insert`, `eject`, `dispose`), lives in `src/scenes/<id>.ts` and is listed in `SCENES` in `boot.ts`. Each scene is its own chunk; the choice is kept in `localStorage` as `nk.scene`. Helpers the scenes share (toon materials, outlines, atlas planes, the camera fit, group colours) are in `src/engine/kit.ts`. The 3D tests run once for every file in `src/scenes`, and `check-size` budgets each scene.
 
-Order: Replay Deck (default), Switchboard (26 October 2026), then Glovebox and Signal Box, each on its own branch and merged only when every test passes.
+Order: Replay Deck (default), Switchboard and Glovebox (26 October 2026), then Signal Box, each on its own branch and merged only when every test passes.
 
 ## Replay Deck (26 October 2026)
 
@@ -92,6 +92,38 @@ Kept away from: a cabinet in the shape of a known maker's board, logos or namepl
 | Printer | four noise ticks at 3 kHz, 80 ms apart |
 | Unplug | triangle 400 to 200 Hz, 100 ms; noise 30 ms |
 
+## Glovebox (26 October 2026)
+
+**Idea.** In a chemistry lab the glovebox is the sandbox: a sealed box, gloves and an airlock. It ties a chemistry degree to the code-mode sandbox, where model-written code runs sealed off and the host checks every call. Each project is a sample canister. Choosing one sends it through the airlock: the outer door shuts, the chamber purges, the gloves set the canister under the gauge, and the gauge accepts the reading.
+
+**Scene.** A dark bench with a steel shelf unit of canisters (one shelf per group, flagships on top) and a steel glovebox: a glass front and top drawn as edges with two glints, three glove ports in a row (gloves in two, the third capped), a round airlock on the right with a yellow band and two round doors, and inside, a pressure gauge, a dot-matrix status panel and a small stage under the gauge. The camera never moves. When the view is clearly wider than tall the shelf and the glovebox stand side by side; otherwise the glovebox sits on the shelf unit, off centre.
+
+**Canisters.** A steel body, a cap in the group colour, and a paper label with a band in the group colour, the title, where the page's numbers are quoted from (the tag or a short commit) and the canister's own mark. A chosen canister's cap lights and it slides forward.
+
+| Element | Colour |
+|---|---|
+| Steel | #C9CED1 |
+| Frame, shelves, doors | #8F979B |
+| Glass edges | #7FA7B5 |
+| Safety yellow (gauge rim, airlock band, door wheel) | #F2C230 |
+| Ink, gloves | #1C2326 |
+| Lit cap | #FFF3C4 |
+
+Kept away from: a face. An early draft had two ports with the gauge above them, which read as a pair of eyes when the box sat on the shelf in portrait; it now has three ports in a row, the gauge and stage off centre, and the box off centre on the shelf. No logos or maker plates, and no warning symbols copied from real labels.
+
+**Motion.** Loading takes about 1.6 s: into the airlock (420 ms), the outer door shuts, the needle drops while the chamber purges (300 ms), the canister slides through the inner door, the gloves reach for it and carry it to the stage (380 ms), and the needle swings into the green band. Eject goes the same way back, shortened, in about 1 s. A second Enter skips to the end; with reduced motion every step is a cut. Low power builds the arms with fewer segments.
+
+**Sound.** Off by default; at most 4 tones per motif.
+
+| Event | Voices |
+|---|---|
+| Door | noise 60 ms at 400 Hz; square 70 Hz, 120 ms |
+| Purge | noise 320 ms, lowpass 6 kHz to 800 Hz |
+| Glove | square 880 to 1100 Hz with a wobble, 80 ms |
+| Gauge tick | square 2.4 kHz, 10 ms |
+| Accepted | triangle 659, 831, 988 Hz |
+| Slide | noise 200 ms, lowpass 1.5 kHz to 600 Hz |
+
 ## "Who is this?" test
 
 Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-dark.png` and `<scene>-panel-*.png` screenshots in the CI `reports` artifact) and ask: "Does this remind you of any product, character or game?" If anyone names one, change the silhouette or the palette and test again. Write the answers here in general terms; if someone names something, write "named a product" or "named a character" and keep the name out of this file.
@@ -100,5 +132,6 @@ Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-da
 |---|---|---|---|---|
 | 26 October 2026 | Replay Deck | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 | 26 October 2026 | Switchboard | 0 of 5 | Pending: asked Necmi to run the test | None yet |
+| 26 October 2026 | Glovebox | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 
 A scene is not final until 5 people have answered with no recognitions.

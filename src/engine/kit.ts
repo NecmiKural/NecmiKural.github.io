@@ -6,6 +6,7 @@ import {
   Box3,
   DataTexture,
   InstancedMesh,
+  Line,
   Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
@@ -102,7 +103,7 @@ export function drawnBox(root: Object3D): Box3 {
   root.updateWorldMatrix(true, true);
   const box = new Box3();
   root.traverseVisible((o) => {
-    if (!(o instanceof Mesh)) return;
+    if (!(o instanceof Mesh || o instanceof Line)) return;
     if (o instanceof InstancedMesh) o.computeBoundingBox();
     else o.geometry.computeBoundingBox();
     const local = o instanceof InstancedMesh ? o.boundingBox : o.geometry.boundingBox;
@@ -111,11 +112,12 @@ export function drawnBox(root: Object3D): Box3 {
   return box;
 }
 
-// Frees every geometry, material and texture under the root, plus any extra resources.
+// Frees every geometry and material of the meshes and lines under the root, plus any extra
+// resources (textures).
 export function disposeAll(root: Object3D, extra: { dispose(): void }[]): void {
   const owned = new Set<{ dispose(): void }>(extra);
   root.traverse((o) => {
-    if (!(o instanceof Mesh)) return;
+    if (!(o instanceof Mesh || o instanceof Line)) return;
     if (o instanceof InstancedMesh) owned.add(o); // frees its instance buffers
     owned.add(o.geometry);
     for (const m of [o.material].flat() as Material[]) owned.add(m);

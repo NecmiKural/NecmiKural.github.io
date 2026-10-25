@@ -12,6 +12,7 @@ import type { CreateScene, Project, Scene, Stage } from "./types.ts";
 const SCENES: { id: string; name: string; load: () => Promise<{ create: CreateScene }> }[] = [
   { id: "replay-deck", name: "Replay Deck", load: () => import("../scenes/replay-deck.ts") },
   { id: "switchboard", name: "Switchboard", load: () => import("../scenes/switchboard.ts") },
+  { id: "glovebox", name: "Glovebox", load: () => import("../scenes/glovebox.ts") },
 ];
 
 const POWER_ON: Motif = [
