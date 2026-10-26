@@ -36,8 +36,12 @@ async function openAndClose(page: Page) {
   await expect(page.locator("#panel")).toBeHidden();
 }
 
-test("focus order: header links, Open in 3D, then the rail; arrows, Home and End move within it", async ({ page }) => {
+test("focus order: the hero's two links, header links, Open in 3D, then the rail; arrows, Home and End move within it", async ({ page }) => {
   await page.goto("/");
+  for (const name of ["See the work", "Try a demo"]) {
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name, exact: true })).toBeFocused();
+  }
   for (const l of data.links.filter((l) => !isSite(l.url))) {
     await page.keyboard.press("Tab");
     await expect(page.locator(`header a[href="${l.url}"]`)).toBeFocused();
@@ -306,9 +310,11 @@ test.describe("lab", () => {
   test("a lab of 21 projects keeps every flask on its shelf and within reach of the pointer", async ({ page }) => {
     await page.goto("/");
     // Two more projects in every group: copies of each section's first article, with new ids.
+    // ("Try it" is a section without articles.)
     const all = await page.evaluate(() => {
       for (const section of document.querySelectorAll("main section[aria-labelledby]")) {
-        const first = section.querySelector("article[id]") as HTMLElement;
+        const first = section.querySelector("article[id]") as HTMLElement | null;
+        if (!first) continue;
         for (const n of [1, 2]) {
           const copy = first.cloneNode(true) as HTMLElement;
           copy.id = `${first.id}-copy-${n}`;

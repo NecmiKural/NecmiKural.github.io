@@ -3,7 +3,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { firstFrame, imageSize } from "../scripts/render.ts";
+import { readFileSync } from "node:fs";
+import { BANNER, firstFrame, imageSize, svgSize } from "../scripts/render.ts";
 
 // A 2 x 1 GIF: header, screen descriptor with a two-colour global table, then the given blocks.
 const gif = (...blocks: number[][]) =>
@@ -50,4 +51,10 @@ test("sizes come from the PNG and GIF headers and the SVG viewBox, and a zero si
   assert.throws(() => imageSize(png.subarray(0, 20), "t"), /truncated PNG/);
   assert.throws(() => imageSize(Uint8Array.from([...Buffer.from("GIF89a"), 0, 0, 0, 0]), "t"), /no size in the gif header/);
   assert.throws(() => imageSize(Buffer.from("<html>not found</html>"), "t"), /not an SVG/);
+});
+
+test("the banners are the size the page reserves for them", () => {
+  for (const scheme of ["light", "dark"]) {
+    assert.deepEqual(svgSize(readFileSync(`public/assets/banner-${scheme}.svg`, "utf8"), scheme), BANNER);
+  }
 });

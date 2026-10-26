@@ -1,17 +1,29 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { defineConfig, type Plugin } from "vite";
-import { firstFrame, imageSize, renderPage, type Portfolio, type Sizes } from "./scripts/render.ts";
+import { fetchLatest, LEFT_OUT } from "./scripts/latest.ts";
+import { firstFrame, imageSize, renderPage, type Latest, type Portfolio, type Sizes } from "./scripts/render.ts";
 
 // Renders index.html from the vendored content file. The project visuals are fetched from their
 // repos at the pinned commit into public/visuals, so the site serves them itself; a GIF also
-// gets a still of its first frame, shown until it plays.
+// gets a still of its first frame, shown until it plays. The "Latest" strip is fetched too, and
+// left out (with a warning) when any of its requests fails.
 function portfolio(): Plugin {
   let data: Portfolio;
   let sizes: Sizes = {};
+  let latest: Latest | null = null;
   return {
     name: "portfolio",
     async buildStart() {
       data = JSON.parse(await readFile("content/portfolio.json", "utf8"));
+      await rm(LEFT_OUT, { force: true });
+      const fetchingLatest = fetchLatest(data)
+        .then((latest) => latest ?? Promise.reject(new Error("no release or Hub update to show")))
+        .catch(async (e: Error) => {
+          await writeFile(LEFT_OUT, e.message);
+          this.warn(`Latest strip left out: ${e.message}`);
+          if (process.env.GITHUB_ACTIONS) console.log(`::warning::Latest strip left out: ${e.message}`);
+          return null;
+        });
       await rm("public/visuals", { recursive: true, force: true }); // no file left from an earlier build
       await mkdir("public/visuals", { recursive: true });
       const fetched = await Promise.all(
@@ -37,8 +49,9 @@ function portfolio(): Plugin {
           }),
       );
       sizes = Object.fromEntries(fetched);
+      latest = await fetchingLatest;
     },
-    transformIndexHtml: { order: "post", handler: (html) => renderPage(html, data, sizes) },
+    transformIndexHtml: { order: "post", handler: (html) => renderPage(html, data, sizes, latest) },
   };
 }
 

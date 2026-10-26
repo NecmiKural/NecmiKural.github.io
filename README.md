@@ -1,14 +1,16 @@
 # NecmiKural.github.io
 
-Source of https://necmikural.github.io: one static HTML page that works with JavaScript off, mirrored to the Hugging Face Space `necmikural/portfolio`. A list of every project, grouped as on the page, sits beside the content on wide screens and folds into one line at the top on narrow ones. An "Open in 3D" button shows the same projects in a 3D scene; nothing opens on its own, and the page is complete without it.
+Source of https://necmikural.github.io: one static HTML page that works with JavaScript off, mirrored to the Hugging Face Space `necmikural/portfolio`. The heading is the profile README's lab banner (light or dark with the colour scheme), followed by two links, "See the work" and "Try a demo". "Try it" comes first: a table of every working thing a visitor can open (Spaces, a dataset, a notebook, a live app), each with its project. A list of every project, grouped as on the page, sits beside the content on wide screens and folds into one line at the top on narrow ones. An "Open in 3D" button shows the same projects in a 3D scene; nothing opens on its own, and the page is complete without it.
 
 ## Where the words come from
 
-`content/portfolio.json` and the icons in `public/assets/icons/` are copies of files in [NecmiKural/NecmiKural](https://github.com/NecmiKural/NecmiKural). There, `content/portfolio.toml` is the source, and its CI checks weekly that every quoted number is still word for word in the project's README at the linked tag or commit.
+`content/portfolio.json`, the icons in `public/assets/icons/`, the banners in `public/assets/` and the CV in `public/cv/` are copies of files in [NecmiKural/NecmiKural](https://github.com/NecmiKural/NecmiKural). There, `content/portfolio.toml` is the source, and its CI checks weekly that every quoted number is still word for word in the project's README at the linked tag or commit.
 
 Do not edit the copies. Change the TOML in that repo, run its build, push, then run `npm run sync-content` here and commit. CI compares the copies byte for byte with that repo's `main` on every push and every Monday, and fails if they differ.
 
 Project visuals (the flagship demos, app screenshots, crossfade's demo GIF, charts and figures from the other repos; a project may have several, and portrait screenshots sit side by side) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF is served as a still of its first frame, cut at build time; with JavaScript it plays on its own, unless the visitor asks for less motion, and a button stops it and plays it again. Without JavaScript the still stays. On the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens; neither moves with reduced motion or in print.
+
+The "Latest" strip in the header is fetched at build time, not stored: the newest release across the shown NecmiKural repos (GitHub API, with the Actions token in CI) and the newest update to a Space or dataset in "Try it" (Hugging Face API), each with its date. If any request fails, the build leaves the strip out and logs why; it never shows a guess.
 
 ## Commands
 
@@ -41,13 +43,13 @@ Design notes, colours, sound motifs and the "who is this?" test log are in [docs
 On every push, pull request and weekly:
 - the content copies match the profile repo;
 - the copy check and the size budgets pass;
-- Playwright: with JavaScript off, every project, claim and profile link is on the page; at 320, 768, 1024 and 1440 px in light and dark, nothing overflows, the intro is above the fold and axe finds no WCAG 2.2 AA violations;
+- Playwright: with JavaScript off, every project, claim and profile link is on the page and the hero's two links reach their sections; the banner is the heading in both colour schemes; "Try it" lists every item with its project; the "Latest" strip, when present, has real dates and links; at 320, 768, 1024 and 1440 px in light and dark, nothing overflows, the intro is above the fold and axe finds no WCAG 2.2 AA violations;
 - Playwright, 3D mode (Chromium, WebGL in software): nothing opens or loads on its own; on a phone the button is large and works; for every scene: every project opens from the rail by keyboard and Escape steps back out; the focus order; no model, image or font requests; no frames while idle (the Lab: a slow ambient animation that rests in a hidden tab and with low power, and none with reduced motion); reduced motion; sound off by default; no WebGL 2 and a lost context; axe with the deck and a project open;
 - Playwright, the project list: with JavaScript off it opens and links to every project in page order; on a wide screen it sits beside the content, every link reaches its project and stays in view, and the project reached is marked; on a phone it is one line until opened;
 - Lighthouse mobile: Performance 95 or more, Accessibility, Best Practices and SEO 100;
 - lychee finds no broken links (LinkedIn is skipped because it blocks bots).
 
-On a push to `main`, the `deploy` job publishes `dist/` to GitHub Pages, and the `space` job uploads the same files to the Space. That job skips its steps until `HF_TOKEN` exists in the `hugging-face` environment. To turn it on:
+On a push to `main`, and on the weekly run (which refreshes the "Latest" strip), the `deploy` job publishes `dist/` to GitHub Pages, and the `space` job uploads the same files to the Space. That job skips its steps until `HF_TOKEN` exists in the `hugging-face` environment. To turn it on:
 1. Create the static Space `necmikural/portfolio` on Hugging Face.
 2. Create a fine-grained token with write access to that Space only.
 3. Add it: `gh secret set HF_TOKEN --env hugging-face -R NecmiKural/NecmiKural.github.io`.
