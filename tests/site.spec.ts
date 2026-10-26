@@ -310,8 +310,9 @@ for (const { width, height } of VIEWPORTS) {
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
         .analyze();
       expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(", ")}`)).toEqual([]);
-      // Kept for review in the CI artifact, not compared: fonts differ between machines.
-      await page.screenshot({ path: info.outputPath(`${width}-${colorScheme}.png`), fullPage: true });
+      // Kept for review in the CI artifact, not compared: fonts differ between machines. In CSS
+      // pixels, so the long page at 320 px stays inside WebKit's 32767-pixel screenshot limit.
+      await page.screenshot({ path: info.outputPath(`${width}-${colorScheme}.png`), fullPage: true, scale: "css" });
     });
   }
 }
