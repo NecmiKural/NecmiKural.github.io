@@ -39,7 +39,7 @@ jobs:
           for attempt in 1 2 3; do
             timeout 300 npx playwright install --with-deps chromium firefox webkit && exit 0
             echo "browser install attempt $attempt did not finish; retrying"
-            sudo dpkg --configure -a # finish any package an interrupted attempt left half set up
+            sudo dpkg --configure -a || true # finish what an interrupted attempt left half set up
           done
           exit 1
       - run: npm test
