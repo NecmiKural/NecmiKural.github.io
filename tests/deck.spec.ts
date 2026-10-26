@@ -16,6 +16,8 @@ const rail = (page: Page, id: string) => page.locator(`#deck .rail button[data-i
 const bar = (page: Page, name: string) => page.locator("#deck .bar").getByRole("button", { name, exact: true });
 const frames = async (page: Page) => Number(await page.locator("#deck canvas").getAttribute("data-frames"));
 const held = (page: Page) => page.locator("#deck canvas"); // data-held: the project the scene holds
+// Scenes with an ambient animation (Stage.ambient): they draw a few frames a second while idle.
+const AMBIENT = new Set(["lab"]);
 
 // With a scene id, also checks that this scene is the one running: a scene that fails to load or
 // is not registered falls back to the default, which would otherwise pass its tests.
@@ -198,25 +200,72 @@ test.describe("lab", () => {
   const caption = (page: Page) => page.locator("#deck canvas");
   const flagships = data.projects.filter((p) => p.group === "flagship").length;
 
-  test("renders 320 pixels across, scaled up without smoothing, at every window size", async ({ page }) => {
+  test("renders at least 320 x 200 pixels in the canvas's shape, scaled up without smoothing, at every window size", async ({ page }) => {
     await powerOn(page, "lab");
     const canvas = page.locator("#deck canvas");
     for (const viewport of [
       { width: 1280, height: 720 },
       { width: 1920, height: 960 },
+      { width: 1920, height: 600 },
       { width: 1024, height: 768 },
-      { width: 606, height: 800 }, // widths where scaling the pixel ratio came out at 319
-      { width: 961, height: 800 },
+      { width: 606, height: 800 },
+      { width: 390, height: 844 },
     ]) {
       await page.setViewportSize(viewport);
-      await expect.poll(() => canvas.evaluate((c: HTMLCanvasElement) => c.width), { message: `${viewport.width} wide` }).toBe(320);
+      const grid = () =>
+        canvas.evaluate((c: HTMLCanvasElement) => {
+          const shape = c.width / c.height / (c.clientWidth / c.clientHeight);
+          return c.width >= 320 && c.height >= 200 && (c.width === 320 || c.height === 200) && Math.abs(shape - 1) < 0.02;
+        });
+      await expect.poll(grid, { message: `${viewport.width} x ${viewport.height}` }).toBe(true);
       await expect(canvas).toHaveCSS("image-rendering", "pixelated");
     }
   });
 
   test("the HUD shows the page's own counts", async ({ page }) => {
     await powerOn(page, "lab");
-    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`INVENTORY: ${data.projects.length} PROJECTS\\nSAMPLES: ${flagships} FLAGSHIPS\\nLAB: OPEN`));
+    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`\\n${data.projects.length} PROJECTS\\n${flagships} FLAGSHIPS\\nLAB OPEN`));
+  });
+
+  test("the room moves a few times a second while idle, and rests in a hidden tab and with low power", async ({ page }) => {
+    await powerOn(page, "lab");
+    const still = async (what: string) => {
+      await page.waitForTimeout(300);
+      const before = await frames(page);
+      await page.waitForTimeout(1000);
+      expect(await frames(page), what).toBe(before);
+    };
+    await page.waitForTimeout(500);
+    const before = await frames(page);
+    await page.waitForTimeout(2000);
+    const drawn = (await frames(page)) - before;
+    expect(drawn).toBeGreaterThan(4); // it moves
+    expect(drawn).toBeLessThanOrEqual(32); // at about 12 frames a second, not 60
+    const hide = (hidden: boolean) =>
+      page.evaluate((h) => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+        document.dispatchEvent(new Event("visibilitychange"));
+      }, hidden);
+    await hide(true);
+    await still("in a hidden tab");
+    await hide(false);
+    const shown = await frames(page);
+    await expect.poll(() => frames(page)).toBeGreaterThan(shown + 2);
+    await bar(page, "Low power").click();
+    await expect(bar(page, "Low power")).toHaveAttribute("aria-pressed", "true");
+    await still("with low power");
+  });
+
+  test.describe("with reduced motion", () => {
+    test.use({ reducedMotion: "reduce" });
+
+    test("the room stays still", async ({ page }) => {
+      await powerOn(page, "lab");
+      await page.waitForTimeout(500);
+      const before = await frames(page);
+      await page.waitForTimeout(1500);
+      expect(await frames(page)).toBe(before);
+    });
   });
 
   test("the sample on the bench stays there, and named, while another is pointed at", async ({ page }) => {
@@ -235,7 +284,7 @@ test.describe("lab", () => {
     await page.clock.runFor(200); // the pointed-at flask has hopped; the assay is still running
     await expect(rail(page, b.id)).toBeFocused();
     await expect(held(page)).toHaveAttribute("data-held", a.id);
-    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`${a.title.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*ASSAY: RUNNING`));
+    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`${a.title.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*ASSAY RUNNING`));
     // Where each flask is: the pointer finds the sample on the bench well below the shelf.
     const rows = await page.evaluate(() => {
       const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
@@ -254,7 +303,7 @@ test.describe("lab", () => {
     await page.clock.resume();
     await expect(page.locator("#panel-title")).toBeFocused();
     await expect(page.locator("#panel-title")).toHaveAccessibleName(a.title);
-    await expect(caption(page)).toHaveAttribute("data-caption", /ASSAY: DONE/); // the titration ran; no verdict claimed
+    await expect(caption(page)).toHaveAttribute("data-caption", /ASSAY DONE/); // the run ended; no verdict claimed
   });
 });
 
@@ -333,6 +382,7 @@ for (const scene of SCENES) {
       await page.waitForTimeout(1500); // anything still queued would have run by now
       expect(await page.evaluate(() => (window as unknown as { behind: string[] }).behind)).toEqual([]);
       await expect(page.locator("#panel")).toBeVisible();
+      if (AMBIENT.has(scene)) return; // its room moves on its own (tested in the lab block)
       const settled = await frames(page);
       await page.waitForTimeout(500);
       expect(await frames(page)).toBe(settled);
@@ -370,7 +420,7 @@ for (const scene of SCENES) {
       expect(requests.filter((u) => !u.startsWith(baseURL as string))).toEqual([]);
     });
 
-    test("renders on demand: no frames while idle", async ({ page }) => {
+    if (!AMBIENT.has(scene)) test("renders on demand: no frames while idle", async ({ page }) => {
       await powerOn(page, scene);
       await expect.poll(() => frames(page)).toBeGreaterThan(0);
       await page.waitForTimeout(500); // the first highlight settles

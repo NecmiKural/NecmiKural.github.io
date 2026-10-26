@@ -22,6 +22,15 @@ import {
 import type { Stage } from "./types.ts";
 
 // The band colour of each project group, the same in every scene.
+// The render size of a pixel-art scene: at least min across and down, in the canvas's shape. The
+// engine sizes the buffer with it and the scene lays out with it, so both agree.
+export function pixelGrid(min: { width: number; height: number }, aspect: number): { width: number; height: number } {
+  return {
+    width: Math.round(Math.max(min.width, min.height * aspect)),
+    height: Math.round(Math.max(min.height, min.width / aspect)),
+  };
+}
+
 export const GROUP_COLOURS: Record<string, string> = {
   flagship: "#e8a33d",
   software: "#3f7cac",
