@@ -21,7 +21,7 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 
 A scene implements `Scene` in `src/engine/types.ts` (`build`, `layout`, `focus`, `insert`, `eject`, `dispose`), lives in `src/scenes/<id>.ts` and is listed in `SCENES` in `boot.ts`. Each scene is its own chunk; the choice is kept in `localStorage` as `nk.scene`. Helpers the scenes share (toon materials, outlines, atlas planes, the camera fit, group colours) are in `src/engine/kit.ts`. The 3D tests run once for every file in `src/scenes`, and `check-size` budgets each scene.
 
-Order: Replay Deck (default), Switchboard and Glovebox (26 October 2026), then Signal Box, each on its own branch and merged only when every test passes.
+Order: Replay Deck (default), then Switchboard, Glovebox and Signal Box (all 26 October 2026), each on its own branch and merged only when every test passes.
 
 ## Replay Deck (26 October 2026)
 
@@ -124,6 +124,39 @@ Kept away from: a face. An early draft had two ports with the gauge above them, 
 | Accepted | triangle 659, 831, 988 Hz |
 | Slide | noise 200 ms, lowpass 1.5 kHz to 600 Hz |
 
+## Signal Box (26 October 2026)
+
+**Idea.** A model-railway signal box. Each project is a lever. Pulling one sets a route: the interlocking checks it lamp by lamp, the signal arm drops and a short train runs to that project's platform. The interlocking checks the route before anything moves, as code checks a proposal before it is accepted; the train is a nod to streams of data, and to Hamilton as a rail junction.
+
+**Scene.** In front, a wooden lever frame with one lever per project, a numbered plate under each, and a shelf with a block display and five route lamps. Behind it, a small yard on farmland under a warm sky: a main line that fans into one siding per group (flagships nearest), a signal where each siding leaves the fan, and a platform with a board (number, name, tag or commit) for every project. Low-poly trees stand round the yard. The camera never moves. When the view is clearly wider than tall the tracks run across the view; otherwise the yard turns so they run away from the frame, sidings side by side, and the boards turn to face the frame.
+
+**Levers.** The usual lever colour code by group: flagship red, software black, coursework yellow, open source blue. A chosen lever's handle lights.
+
+| Element | Colour |
+|---|---|
+| Ballast | #6B6660 |
+| Rails | #3A3A3A |
+| Grass | #7FA65A, varied per vertex |
+| Sky | #F6C28B to #7AA6C2 |
+| Lever frame | #5A4330 |
+| Levers | #B33A2E, #1E1F1C, #E0B32E, #2F6DB5 |
+| Locomotive and wagons | #3D5560 with #E9E2CF; #B0743A; #7D8288 |
+
+Kept away from: any railway's livery or logos, a locomotive with a face, and the colour scheme of any well-known toy train. The locomotive is a plain two-tone shunter with two open wagons. The window of a real signal box was left out: the frame in the foreground does that job.
+
+**Motion.** Pulling a lever takes about 1.6 s to the panel: the lever (150 ms), the five route lamps (275 ms), the signal arm (160 ms), and the train's run along the route's spline to the platform (1 s). Eject backs the train out to the shared stretch of line (700 ms) and returns the signal, lamps and lever. A second Enter skips to the end; with reduced motion every step is a cut. Low power hides the trees and sleepers.
+
+**Sound.** Off by default; at most 4 tones per motif.
+
+| Event | Voices |
+|---|---|
+| Lever | noise 60 ms at 600 Hz; triangle 90 Hz, 120 ms |
+| Interlocking | square 1 kHz, 8 ms, once per lamp |
+| Points | noise 50 ms at 300 Hz; square 60 Hz, 80 ms |
+| Horn | square 392 and 466 Hz together, 250 ms |
+| Running | eight noise chuffs that come closer together |
+| Arrived | triangle 784 Hz, then 659 Hz |
+
 ## "Who is this?" test
 
 Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-dark.png` and `<scene>-panel-*.png` screenshots in the CI `reports` artifact) and ask: "Does this remind you of any product, character or game?" If anyone names one, change the silhouette or the palette and test again. Write the answers here in general terms; if someone names something, write "named a product" or "named a character" and keep the name out of this file.
@@ -133,5 +166,6 @@ Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-da
 | 26 October 2026 | Replay Deck | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 | 26 October 2026 | Switchboard | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 | 26 October 2026 | Glovebox | 0 of 5 | Pending: asked Necmi to run the test | None yet |
+| 26 October 2026 | Signal Box | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 
 A scene is not final until 5 people have answered with no recognitions.

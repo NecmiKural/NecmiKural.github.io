@@ -59,7 +59,7 @@ test("focus order: header links, Power on, then the rail; arrows, Home and End m
   await expect(rail(page, ids.at(-2) as string)).toBeFocused();
   // Before the rail, in reverse: the toolbar.
   await page.keyboard.press("Home");
-  for (const name of ["Power off", "Low power", "Sound", "Glovebox", "Switchboard", "Replay Deck"]) {
+  for (const name of ["Power off", "Low power", "Sound", "Signal Box", "Glovebox", "Switchboard", "Replay Deck"]) {
     await page.keyboard.press("Shift+Tab");
     await expect(bar(page, name)).toBeFocused();
   }
@@ -88,6 +88,16 @@ test("Replay Deck is the default; the switcher loads each scene's chunk on deman
   await expect(held(page)).toHaveAttribute("data-held", "");
   await powerOn(page);
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("at 320 px, nothing in 3D mode runs off the side, with every scene's button", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await powerOn(page);
+  const overflow = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>("#deck, #deck .bar, #deck .rail")].map((e) => e.scrollWidth - e.clientWidth),
+  );
+  expect(overflow).toEqual([0, 0, 0]);
+  await expect(page.locator("#deck .scenes button")).toHaveCount(SCENES.length);
 });
 
 test("without WebGL 2 the page says so, loads no 3D code and keeps focus", async ({ page }) => {
@@ -278,26 +288,33 @@ for (const scene of SCENES) {
         await page.setViewportSize(viewport);
         await powerOn(page, scene);
         // Pointer moves over a 47 x 39 grid, dispatched in the page (the same handler a real mouse
-        // runs, but fast enough for software rendering). Returns, for each project hit, the middle
-        // of the points that hit it: a hovered object slides forward, so an edge point can miss.
+        // runs, but fast enough for software rendering). Returns, for each project hit, its most
+        // interior grid point: a hovered object may slide forward, so an edge point can miss, and
+        // a project can have two separate targets (a lever and a board), so a mean can miss too.
         const hits = await page.evaluate(() => {
           const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
           const r = c.getBoundingClientRect();
-          const found: Record<string, { x: number; y: number; n: number }> = {};
+          const grid = new Map<string, string>();
           for (let gy = 1; gy < 40; gy++) {
             for (let gx = 1; gx < 48; gx++) {
-              const x = r.left + (r.width * gx) / 48;
-              const y = r.top + (r.height * gy) / 40;
-              c.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y, bubbles: true }));
-              const id = c.dataset.pointed;
-              if (!id) continue;
-              const f = (found[id] ??= { x: 0, y: 0, n: 0 });
-              f.x += x;
-              f.y += y;
-              f.n += 1;
+              c.dispatchEvent(
+                new PointerEvent("pointermove", {
+                  clientX: r.left + (r.width * gx) / 48,
+                  clientY: r.top + (r.height * gy) / 40,
+                  bubbles: true,
+                }),
+              );
+              if (c.dataset.pointed) grid.set(`${gx},${gy}`, c.dataset.pointed);
             }
           }
-          for (const f of Object.values(found)) Object.assign(f, { x: f.x / f.n, y: f.y / f.n });
+          const found: Record<string, { x: number; y: number; inside: number }> = {};
+          for (const [key, id] of grid) {
+            const [gx, gy] = key.split(",").map(Number);
+            const inside = [-1, 1].flatMap((d) => [`${gx + d},${gy}`, `${gx},${gy + d}`]).filter((k) => grid.get(k) === id).length;
+            if ((found[id]?.inside ?? -1) < inside) {
+              found[id] = { x: r.left + (r.width * gx) / 48, y: r.top + (r.height * gy) / 40, inside };
+            }
+          }
           return found;
         });
         expect(ids.filter((id) => !hits[id]), "projects the pointer never reached").toEqual([]);
