@@ -42,18 +42,25 @@ if (power instanceof HTMLButtonElement && line) {
   });
 }
 
-// A moving project visual (scripts/render.ts) shows its first frame until played. The button swaps
-// the image's src with its data-play, so a second press stops it. Delegated, so the copy of a
-// project in the 3D panel plays too.
-for (const b of document.querySelectorAll<HTMLButtonElement>("button.play")) b.hidden = false;
-document.addEventListener("click", (e) => {
-  const b = e.target instanceof Element ? e.target.closest("button.play") : null;
-  const img = b?.parentElement?.querySelector("img[data-play]");
-  if (!b?.firstChild || !(img instanceof HTMLImageElement)) return;
+// A moving project visual (scripts/render.ts) is served as its first frame. It plays on its own
+// unless the visitor asks for less motion, and its button stops it and plays it again by swapping
+// the image's src with its data-play. Delegated, so the copy of a project in the 3D panel works too.
+const toggle = (b: Element) => {
+  const img = b.parentElement?.querySelector("img[data-play]");
+  if (!b.firstChild || !(img instanceof HTMLImageElement)) return;
   const next = img.dataset.play as string;
   img.dataset.play = img.getAttribute("src") as string;
   img.src = next;
   b.firstChild.textContent = next.endsWith("-still.gif") ? "Play the demo" : "Stop the demo";
+};
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+for (const b of document.querySelectorAll<HTMLButtonElement>("button.play")) {
+  b.hidden = false;
+  if (!calm) toggle(b);
+}
+document.addEventListener("click", (e) => {
+  const b = e.target instanceof Element ? e.target.closest("button.play") : null;
+  if (b) toggle(b);
 });
 
 // The project list: collapsed in the page flow on narrow screens, a column beside the content on

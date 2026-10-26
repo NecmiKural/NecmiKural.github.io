@@ -4,7 +4,7 @@ import { firstFrame, imageSize, renderPage, type Portfolio, type Sizes } from ".
 
 // Renders index.html from the vendored content file. The project visuals are fetched from their
 // repos at the pinned commit into public/visuals, so the site serves them itself; a GIF also
-// gets a still of its first frame, for visitors who ask for less motion.
+// gets a still of its first frame, shown until it plays.
 function portfolio(): Plugin {
   let data: Portfolio;
   let sizes: Sizes = {};
@@ -16,9 +16,8 @@ function portfolio(): Plugin {
       await mkdir("public/visuals", { recursive: true });
       const fetched = await Promise.all(
         data.projects
-          .filter((p) => p.urls.visual)
-          .map(async (p) => {
-            const url = p.urls.visual as string;
+          .flatMap((p) => p.visuals.map(({ url }, i) => ({ p, url, name: i ? `${p.id}-${i + 1}` : p.id })))
+          .map(async ({ p, url, name }) => {
             if (!/^https:\/\/raw\.githubusercontent\.com\/NecmiKural\/[\w.-]+\/[0-9a-f]{40}\/[\w./-]+\.(svg|png|gif)$/.test(url) || url.includes("..")) {
               throw new Error(`${p.id}: visual is not a file in a NecmiKural repo at a pinned commit: ${url}`);
             }
@@ -27,14 +26,14 @@ function portfolio(): Plugin {
             const bytes = new Uint8Array(await res.arrayBuffer());
             const { kind, width, height } = imageSize(bytes, url);
             if (!url.endsWith(`.${kind}`)) throw new Error(`${p.id}: ${url} is not a ${kind} file`);
-            const file = `${p.id}.${kind}`;
+            const file = `${name}.${kind}`;
             await writeFile(`public/visuals/${file}`, bytes);
             let still: string | undefined;
             if (kind === "gif") {
-              still = `${p.id}-still.gif`;
+              still = `${name}-still.gif`;
               await writeFile(`public/visuals/${still}`, firstFrame(bytes, url));
             }
-            return [p.id, { width, height, file, still }] as const;
+            return [url, { width, height, file, still }] as const;
           }),
       );
       sizes = Object.fromEntries(fetched);

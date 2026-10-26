@@ -36,8 +36,7 @@ export interface Project {
   card: string;
   stack: string[];
   byline: string;
-  visual_alt?: string;
-  visual_caption?: string;
+  visuals: { url: string; alt: string; caption: string | null }[];
   demo_note?: string;
   urls: {
     repo: string;
@@ -57,7 +56,8 @@ export interface Portfolio {
   links: Link[];
   projects: Project[];
 }
-// Each visual as served from public/visuals: its file, its size, and for a moving image a still.
+// Each visual as served from public/visuals, by its URL: its file, its size, and for a moving
+// image a still.
 export type Sizes = Record<string, { width: number; height: number; file: string; still?: string }>;
 
 export const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -163,18 +163,17 @@ function article(p: Project, sizes: Sizes): string {
       `<li>${c.lead ? `<strong>${esc(c.lead)}</strong> ` : ""}${esc(need(c.text, `${where}.claim`))}` +
       ` <a class="src" href="${href(c.source)}">${esc(sourceLabel(c.source))}</a></li>`,
   );
-  let visual = "";
-  if (p.urls.visual) {
-    const v = need(sizes[p.id], `${where} visual size`);
-    // A moving image shows its first frame until the visitor plays it: src/main.ts reveals the
-    // button, which swaps src and data-play. Without JavaScript the first frame stays.
+  // A moving image is served as its first frame, with data-play naming the moving one: src/main.ts
+  // plays it and reveals the button that stops it. Without JavaScript the first frame stays.
+  const visuals = p.visuals.map((pic) => {
+    const v = need(sizes[pic.url], `${where} visual size`);
     const img =
       `<img class="visual" src="visuals/${v.still ?? v.file}"${v.still ? ` data-play="visuals/${v.file}"` : ""}` +
-      ` alt="${esc(need(p.visual_alt, `${where}.visual_alt`))}" width="${v.width}" height="${v.height}" loading="lazy" decoding="async">`;
+      ` alt="${esc(need(pic.alt, `${where}.visuals.alt`))}" width="${v.width}" height="${v.height}" loading="lazy" decoding="async">`;
     const play = v.still ? `<button class="play" type="button" hidden>Play the demo<span class="vh"> of ${esc(p.title)}</span></button>` : "";
-    const caption = p.visual_caption ? `<figcaption>${esc(p.visual_caption)}</figcaption>` : "";
-    visual = `<figure class="figure">${img}${play}${caption}</figure>`;
-  }
+    const caption = pic.caption ? `<figcaption>${esc(pic.caption)}</figcaption>` : "";
+    return `<figure class="figure">${img}${play}${caption}</figure>`;
+  });
   const row = linkRow(p);
   return [
     `<article id="${p.id}">`,
@@ -182,7 +181,7 @@ function article(p: Project, sizes: Sizes): string {
     `<p class="byline">${esc([byline, p.stack.join(", ")].filter(Boolean).join(SEP))}</p>`,
     `<p>${esc(need(p.card, `${where}.card`))}</p>`,
     claims.length ? `<ul class="claims">\n${claims.join("\n")}\n</ul>` : "",
-    visual,
+    ...visuals,
     row.length ? `<p class="more">${row.join(SEP)}</p>` : "",
     "</article>",
   ]
