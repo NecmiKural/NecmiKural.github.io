@@ -32,14 +32,23 @@ jobs:
         env:
           PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
       - run: npm run size
-      # The Ubuntu package mirror sometimes slows to a crawl and the install never finishes; each
-      # attempt gets 5 minutes, and a retry opens fresh connections.
+      # The Ubuntu package mirror sometimes goes silent mid-install. Killing apt from outside leaves
+      # it holding the dpkg lock, so apt handles the stall itself: after 30 s without data it drops
+      # the connection and tries again or moves to the next mirror in the list.
+      - name: Install browser system packages
+        timeout-minutes: 10
+        run: |
+          printf 'Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "5";\n' |
+            sudo tee /etc/apt/apt.conf.d/99-stalled-mirror
+          npx playwright install-deps chromium firefox webkit
+      # The browsers come from Playwright's own servers and touch no system package, so a stalled
+      # download can be killed and tried again.
       - name: Install browsers
+        timeout-minutes: 10
         run: |
           for attempt in 1 2 3; do
-            timeout 300 npx playwright install --with-deps chromium firefox webkit && exit 0
-            echo "browser install attempt $attempt did not finish; retrying"
-            sudo dpkg --configure -a || true # finish what an interrupted attempt left half set up
+            timeout 180 npx playwright install chromium firefox webkit && exit 0
+            echo "browser download attempt $attempt did not finish; retrying"
           done
           exit 1
       - run: npm test
