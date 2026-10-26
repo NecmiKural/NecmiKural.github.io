@@ -289,6 +289,17 @@ test.describe("the hero, Try it and Latest", () => {
   });
 });
 
+test("the CV the header links to is served by this site, as a PDF", async ({ request }) => {
+  const cv = data.links.find((l) => l.label.startsWith("CV"));
+  expect(cv?.url).toMatch(/^https:\/\/necmikural\.github\.io\/cv\/[\w.-]+\.pdf$/);
+  const path = new URL(cv?.url as string).pathname;
+  expect(existsSync(`dist${path}`), `dist${path}`).toBe(true);
+  const res = await request.get(path);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("application/pdf");
+  expect((await res.body()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+});
+
 test("with JavaScript, the optional 3D mode is offered", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#power")).toBeVisible();

@@ -4,7 +4,7 @@ Source of https://necmikural.github.io: one static HTML page that works with Jav
 
 ## Where the words come from
 
-`content/portfolio.json`, the icons in `public/assets/icons/` and the banners in `public/assets/` are copies of files in [NecmiKural/NecmiKural](https://github.com/NecmiKural/NecmiKural). There, `content/portfolio.toml` is the source, and its CI checks weekly that every quoted number is still word for word in the project's README at the linked tag or commit.
+`content/portfolio.json`, the icons in `public/assets/icons/`, the banners in `public/assets/` and the CV in `public/cv/` are copies of files in [NecmiKural/NecmiKural](https://github.com/NecmiKural/NecmiKural). There, `content/portfolio.toml` is the source, and its CI checks weekly that every quoted number is still word for word in the project's README at the linked tag or commit.
 
 Do not edit the copies. Change the TOML in that repo, run its build, push, then run `npm run sync-content` here and commit. CI compares the copies byte for byte with that repo's `main` on every push and every Monday, and fails if they differ.
 

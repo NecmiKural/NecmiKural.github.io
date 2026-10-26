@@ -28,7 +28,7 @@ const NOT_PII = /https?:\/\/[^\s)"'<>]+|\b[0-9a-f]{40}\b|\bsha\d+-[\w+/=]+/g; //
 // Files that hold the banned list itself, or integrity hashes, skip the phrase and PII rules.
 // SVG path data reads as phone numbers, so SVGs skip the PII rule only.
 const PATTERN_FILES = new Set(["scripts/check-copy.ts", "package-lock.json"]);
-const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?)$/i;
+const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|pdf)$/i;
 // Built JavaScript is src/ (checked as source) plus the three library, which is not ours to lint.
 const BUNDLED = /^dist\/assets\/.*\.js$/;
 
