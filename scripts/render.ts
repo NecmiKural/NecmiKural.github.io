@@ -48,6 +48,15 @@ export interface Project {
   };
   claims: Claim[];
 }
+// A working thing a visitor can open (a Space, a dataset, a notebook, a live app), for "Try it".
+export interface TryItem {
+  name: string;
+  url: string;
+  kind: string;
+  project: string;
+  see: string;
+  note: string | null;
+}
 export interface Portfolio {
   profile: Record<
     "name" | "headline" | "education" | "location" | "availability" | "provenance",
@@ -55,6 +64,13 @@ export interface Portfolio {
   >;
   links: Link[];
   projects: Project[];
+  try: TryItem[];
+}
+// The newest release across the shown repos and the newest update to a Space or dataset in "Try
+// it", fetched at build time (scripts/latest.ts). Null when a fetch failed: the strip is left out.
+export interface Latest {
+  release: { repo: string; tag: string; url: string; date: string };
+  update: { name: string; kind: string; url: string; date: string };
 }
 // Each visual as served from public/visuals, by its URL: its file, its size, and for a moving
 // image a still.
@@ -220,7 +236,53 @@ function head(data: Portfolio): string {
   ].join("\n");
 }
 
-function body(data: Portfolio, sizes: Sizes): string {
+const DAY = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+function when(iso: string): string {
+  if (Number.isNaN(Date.parse(iso))) throw new Error(`not a date: ${iso}`);
+  return `<time datetime="${esc(iso)}">${DAY.format(new Date(iso))}</time>`;
+}
+
+export function latestStrip(latest: Latest | null): string {
+  if (!latest) return "";
+  const { release: r, update: u } = latest;
+  return (
+    `<p class="latest"><span class="label">Latest</span>` +
+    ` <span>Release <a href="${href(r.url)}">${esc(r.tag)}</a> of ${esc(r.repo)}, ${when(r.date)}</span>` +
+    ` <span>${esc(u.kind)} <a href="${href(u.url)}">${esc(u.name)}</a> updated ${when(u.date)}</span></p>`
+  );
+}
+
+// "Try it": one row per working thing, with the project it belongs to. On phones the rows stack
+// (index.html), so the table elements carry their roles explicitly to keep their meaning.
+function tryIt(data: Portfolio): string {
+  if (!data.try.length) return "";
+  const rows = data.try.map((t) => {
+    const p = need(data.projects.find((x) => x.id === t.project), `try ${t.name}: project ${t.project}`);
+    return (
+      `<tr role="row"><th role="rowheader" scope="row"><a href="${href(t.url)}">${esc(need(t.name, "try.name"))}</a>` +
+      ` <a class="of" href="#${p.id}">${esc(p.title)}</a></th>` +
+      `<td role="cell" data-label="Type">${esc(need(t.kind, "try.kind"))}</td>` +
+      `<td role="cell" data-label="What you'll see">${esc(need(t.see, "try.see"))}</td>` +
+      `<td role="cell" data-label="Note" class="note">${esc(t.note ?? "")}</td></tr>`
+    );
+  });
+  const cols = ["Name", "Type", "What you'll see", "Note"].map((c) => `<th role="columnheader" scope="col">${esc(c)}</th>`);
+  return [
+    `<section aria-labelledby="try">`,
+    `<h2 id="try">Try it</h2>`,
+    `<p class="note">Working things you can open in the browser now.</p>`,
+    `<table class="try" role="table" aria-labelledby="try">`,
+    `<thead><tr role="row">${cols.join("")}</tr></thead>`,
+    `<tbody>\n${rows.join("\n")}\n</tbody></table>`,
+    `</section>`,
+  ].join("\n");
+}
+
+// The banner's size, as drawn by the profile repo (tests/render.test.ts reads it from the files).
+export const BANNER = { width: 1200, height: 240 };
+
+function body(data: Portfolio, sizes: Sizes, latest: Latest | null): string {
   const prof = data.profile;
   const links = data.links
     .filter((l) => !isSite(l.url))
@@ -245,34 +307,49 @@ function body(data: Portfolio, sizes: Sizes): string {
       .map((p) => `<li><a href="#${p.id}">${esc(need(p.title, `projects[${p.id}].title`))}</a></li>`);
     return items.length ? [`<li><span>${HEADINGS[g]}</span>\n<ul>\n${items.join("\n")}\n</ul></li>`] : [];
   });
+  const tryLink = data.try.length ? [`<li><a href="#try">Try it</a></li>`] : [];
   const toc =
     `<nav aria-label="Projects"><details id="toc">` +
-    `<summary>Projects (${data.projects.length})</summary>\n<ul>\n${groups.join("\n")}\n</ul></details></nav>`;
+    `<summary>Projects (${data.projects.length})</summary>\n<ul>\n${[...tryLink, ...groups].join("\n")}\n</ul></details></nav>`;
+  // The profile README's banner, the dark one for a dark scheme. It spells the name, so the name is
+  // its alt and it is the heading; it is the first thing painted, so it is fetched first.
+  const name = need(prof.name, "profile.name");
+  const banner =
+    `<picture><source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">` +
+    `<img class="banner" src="assets/banner-light.svg" alt="${esc(name)}" width="${BANNER.width}" height="${BANNER.height}" fetchpriority="high"></picture>`;
+  const ctas = [
+    data.projects.some((p) => p.group === "flagship") ? `<a class="cta primary" href="#flagship">See the work</a>` : "",
+    data.try.length ? `<a class="cta" href="#try">Try a demo</a>` : "",
+  ].filter(Boolean);
   // Joined into one line, as in the profile README; an empty field is skipped.
   const facts = [need(prof.education, "profile.education"), prof.location, prof.availability].filter(Boolean);
   return [
     "<header>",
-    `<h1>${esc(need(prof.name, "profile.name"))}</h1>`,
+    `<h1>${banner}</h1>`,
     `<p class="headline">${esc(prof.headline)}</p>`,
     `<p>${esc(facts.join(" "))}</p>`,
+    ctas.length ? `<p class="ctas">${ctas.join(" ")}</p>` : "",
     `<ul class="links">\n${links.join("\n")}\n</ul>`,
     // In place from the first paint, so showing it shifts nothing; a noscript style in index.html
     // hides it when JavaScript is off.
     `<div id="power-row"><p><button id="power" type="button">Open in 3D</button>` +
       ` <span class="note">The same projects in a 3D scene.</span></p>` +
       `<p id="power-status" class="note" role="status"></p></div>`,
+    latestStrip(latest),
     `<p class="note">${esc(need(prof.provenance, "profile.provenance"))}</p>`,
     "</header>",
     toc,
-    `<main>\n${sections.join("\n")}\n</main>`,
+    `<main>\n${[tryIt(data), ...sections].filter(Boolean).join("\n")}\n</main>`,
     `<footer><p>Built from <a href="${CONTENT_SOURCE}">the profile README's content file</a>.` +
       ` <a href="${SOURCE_REPO}">Source of this site</a>.</p></footer>`,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
-export function renderPage(template: string, data: Portfolio, sizes: Sizes): string {
+export function renderPage(template: string, data: Portfolio, sizes: Sizes, latest: Latest | null = null): string {
   for (const marker of ["<!--head-->", "<!--body-->"]) {
     if (!template.includes(marker)) throw new Error(`index.html has no ${marker} marker`);
   }
-  return template.replace("<!--head-->", () => head(data)).replace("<!--body-->", () => body(data, sizes));
+  return template.replace("<!--head-->", () => head(data)).replace("<!--body-->", () => body(data, sizes, latest));
 }

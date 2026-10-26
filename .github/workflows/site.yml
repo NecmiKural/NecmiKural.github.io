@@ -27,6 +27,8 @@ jobs:
       - name: Content matches the profile repo's main, byte for byte
         run: npm run sync-content -- --check
       - run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # the "Latest" strip reads releases through the GitHub API
       - name: Types and copy (repo and dist)
         run: npm run check
         env:
@@ -84,19 +86,20 @@ jobs:
             test-results
             .lighthouseci/reports
           if-no-files-found: ignore
-      - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      # The weekly run deploys too, so the "Latest" strip stays current between pushes.
+      - if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist
-      - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
 
   deploy:
     needs: check
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       pages: write
@@ -116,7 +119,7 @@ jobs:
   # is skipped. --delete "*" drops files from earlier builds; HF never deletes .gitattributes.
   space:
     needs: check
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     environment: hugging-face
     concurrency:

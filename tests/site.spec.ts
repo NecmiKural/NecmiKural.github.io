@@ -1,10 +1,14 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { LEFT_OUT } from "../scripts/latest.ts";
 import { isSite, type Portfolio } from "../scripts/render.ts";
 
 const data: Portfolio = JSON.parse(readFileSync("content/portfolio.json", "utf8"));
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+// The side list's targets in page order: "Try it", then every project.
+const TARGETS = [...(data.try.length ? ["try"] : []), ...data.projects.map((p) => p.id)];
+const DAY = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const VIEWPORTS = [
   { width: 320, height: 640 },
   { width: 768, height: 1024 },
@@ -26,13 +30,22 @@ test.describe("without JavaScript", () => {
     await expect(page.locator("#power-row")).toBeHidden();
   });
 
+  test("the hero's two calls to action reach the work and Try it", async ({ page }) => {
+    await page.goto("/");
+    for (const [name, id] of [["See the work", "flagship"], ["Try a demo", "try"]]) {
+      await page.getByRole("link", { name, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`#${id}$`));
+      await expect(page.locator(`#${id}`)).toBeInViewport();
+    }
+  });
+
   test("the project list opens and links to every project", async ({ page }) => {
     await page.goto("/");
     const list = page.getByRole("navigation", { name: "Projects" });
     await list.locator("summary").click();
     const links = list.getByRole("link");
-    await expect(links).toHaveCount(data.projects.length);
-    expect(await links.evaluateAll((as) => as.map((a) => a.getAttribute("href")))).toEqual(data.projects.map((p) => `#${p.id}`));
+    await expect(links).toHaveCount(TARGETS.length);
+    expect(await links.evaluateAll((as) => as.map((a) => a.getAttribute("href")))).toEqual(TARGETS.map((id) => `#${id}`));
     const last = data.projects.at(-1) as Portfolio["projects"][number];
     await links.last().click();
     await expect(page.locator(`#${last.id}`)).toBeInViewport();
@@ -59,10 +72,11 @@ test.describe("the project list", () => {
       await expect(links.last()).toBeInViewport({ ratio: 1 });
       const main = (await page.locator("main").boundingBox()) as { x: number };
       expect(((await list.boundingBox()) as { x: number }).x).toBeLessThan(main.x);
-      for (const [i, p] of data.projects.entries()) {
+      await expect(links).toHaveCount(TARGETS.length);
+      for (const [i, id] of TARGETS.entries()) {
         await links.nth(i).click();
-        await expect(page).toHaveURL(new RegExp(`#${p.id}$`));
-        await expect(page.locator(`#${p.id} h3`)).toBeInViewport();
+        await expect(page).toHaveURL(new RegExp(`#${id}$`));
+        await expect(page.locator(`#${id}`)).toBeInViewport();
         await expect(links.nth(i)).toBeInViewport(); // the list stays in view, all of it reachable
         await expect(marked(page)).toHaveCount(1);
         await expect(links.nth(i)).toHaveAttribute("aria-current", "location");
@@ -227,6 +241,54 @@ test.describe("project visuals", () => {
   });
 });
 
+test.describe("the hero, Try it and Latest", () => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`${colorScheme}: the banner is the heading, named by its alt, in the scheme's colours and fetched first`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/");
+      await expect(page.getByRole("heading", { level: 1, name: data.profile.name, exact: true })).toBeVisible();
+      const img = page.locator("h1 img.banner");
+      await expect(img).toHaveAttribute("fetchpriority", "high");
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+      expect(await img.evaluate((i: HTMLImageElement) => i.currentSrc)).toMatch(new RegExp(`/assets/banner-${colorScheme}\\.svg$`));
+    });
+  }
+
+  test("Try it comes first and lists every working thing, each with its project", async ({ page }) => {
+    expect(data.try.length).toBeGreaterThan(0);
+    await page.goto("/");
+    expect(await page.locator("main > section").first().getAttribute("aria-labelledby")).toBe("try");
+    const rows = page.locator("table.try tbody tr");
+    await expect(rows).toHaveCount(data.try.length);
+    for (const [i, t] of data.try.entries()) {
+      const row = rows.nth(i);
+      await expect(row.getByRole("link", { name: t.name, exact: true })).toHaveAttribute("href", t.url);
+      await expect(row.locator("a.of")).toHaveAttribute("href", `#${t.project}`);
+      await expect(page.locator(`#${t.project}`)).toHaveCount(1);
+      await expect(row.locator("td")).toHaveText([t.kind, t.see, t.note ?? ""]);
+    }
+  });
+
+  test("the Latest strip, when the build could fetch it, shows real dates and real links", async ({ page }) => {
+    await page.goto("/");
+    // Skipped only when the build recorded that it left the strip out (an API request failed);
+    // a strip missing for any other reason is a bug.
+    test.skip(existsSync(LEFT_OUT), `the build left the strip out: ${existsSync(LEFT_OUT) ? readFileSync(LEFT_OUT, "utf8") : ""}`);
+    const strip = page.locator("p.latest");
+    await expect(strip).toHaveCount(1);
+    const times = strip.locator("time");
+    await expect(times).toHaveCount(2);
+    for (const time of await times.all()) {
+      const iso = (await time.getAttribute("datetime")) as string;
+      expect(Date.parse(iso)).toBeLessThanOrEqual(Date.now());
+      await expect(time).toHaveText(DAY.format(new Date(iso)));
+    }
+    const [release, update] = await strip.locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    expect(release).toMatch(/^https:\/\/github\.com\/NecmiKural\/[\w.-]+\/releases\/tag\//);
+    expect(data.try.map((t) => t.url)).toContain(update);
+  });
+});
+
 test("with JavaScript, the optional 3D mode is offered", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#power")).toBeVisible();
@@ -239,7 +301,7 @@ for (const { width, height } of VIEWPORTS) {
       await page.emulateMedia({ colorScheme });
       await page.goto("/");
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
-      for (const selector of ["h1", ".headline", "header .links"]) {
+      for (const selector of ["h1", ".headline", ".ctas", "header .links"]) {
         const box = await page.locator(selector).boundingBox();
         expect(box, selector).not.toBeNull();
         expect(box!.y + box!.height, `${selector} bottom`).toBeLessThanOrEqual(height);

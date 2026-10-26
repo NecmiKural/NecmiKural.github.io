@@ -1,4 +1,5 @@
-// Copies content/portfolio.json and the icons it names from the profile repo's main branch.
+// Copies content/portfolio.json, the icons it names and the banners (the page's heading art)
+// from the profile repo's main branch.
 // With --check, compares byte for byte instead and fails on any difference (CI and weekly).
 //   node scripts/sync-content.ts [--check]
 
@@ -24,7 +25,9 @@ for (const icon of icons) {
 // Remote path to local path: the JSON stays in content/, icons are served from public/.
 const files: [string, Buffer][] = [
   ["content/portfolio.json", json],
-  ...(await Promise.all(icons.map(async (i): Promise<[string, Buffer]> => [`public/${i}`, await get(i)]))),
+  ...(await Promise.all(
+    [...icons, "assets/banner-light.svg", "assets/banner-dark.svg"].map(async (i): Promise<[string, Buffer]> => [`public/${i}`, await get(i)]),
+  )),
 ];
 
 let drift = 0;
