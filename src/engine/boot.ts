@@ -358,6 +358,7 @@ export async function boot(o: BootOptions): Promise<void> {
       guard(async () => {
         const id = b.dataset.scene as string;
         if (b.getAttribute("aria-pressed") === "true") return;
+        target = null; // a project chosen before the switch gives way; one chosen after it waits for it
         await run(() => show(id));
         write("nk.scene", id); // only once it has loaded, so a broken scene is not remembered
       }),

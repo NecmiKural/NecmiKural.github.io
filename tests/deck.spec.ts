@@ -100,7 +100,7 @@ test("at 320 px, nothing in 3D mode runs off the side, with every scene's button
   await expect(page.locator("#deck .scenes button")).toHaveCount(SCENES.length);
 });
 
-test("a project chosen while 3D mode loads opens once the scene is in; a switch after a choice wins", async ({ page }) => {
+test("a project chosen while 3D mode loads opens once the scene is in; a switch outranks an earlier choice only", async ({ page }) => {
   const title = page.locator("#panel-title");
 
   await test.step("chosen before the scene has loaded", async () => {
@@ -132,6 +132,19 @@ test("a project chosen while 3D mode loads opens once the scene is in; a switch 
     // No panel over the new scene: the project went with the scene it was loading into.
     await expect(page.locator("#panel")).toBeHidden();
     await expect(held(page)).toHaveAttribute("data-held", "");
+  });
+
+  await test.step("chosen, a scene switch, and chosen again, in the same moment", async () => {
+    await page.evaluate((id) => {
+      const choose = () => document.querySelector<HTMLElement>(`#deck .rail button[data-id="${id}"]`)?.click();
+      choose();
+      document.querySelector<HTMLElement>(`#deck .scenes button[data-scene="replay-deck"]`)?.click();
+      choose(); // a new choice that waits for the switch, not a second press that skips ahead
+    }, ids[2]);
+    await expect(title).toBeFocused();
+    await expect(title).toHaveAccessibleName(data.projects[2].title);
+    await expect(bar(page, "Replay Deck")).toHaveAttribute("aria-pressed", "true");
+    await expect(held(page)).toHaveAttribute("data-held", ids[2]);
   });
 });
 
