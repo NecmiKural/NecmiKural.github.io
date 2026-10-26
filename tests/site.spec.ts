@@ -109,25 +109,29 @@ test.describe("the project list", () => {
 });
 
 test.describe("project visuals", () => {
-  const shown = data.projects.filter((p) => p.urls.visual);
-  const moving = shown.filter((p) => p.urls.visual?.endsWith(".gif"));
+  // Every visual on the page: its project, its place among the project's visuals, and the file the
+  // build serves it as (the main one under the project's id, the next as id-2, and so on).
+  const shown = data.projects.flatMap((p) => p.visuals.map((v, i) => ({ p, v, i, name: i ? `${p.id}-${i + 1}` : p.id })));
+  const moving = shown.filter(({ v }) => v.url.endsWith(".gif"));
+  const at = (page: Page, { p, i }: { p: { id: string }; i: number }) => page.locator(`#${p.id} figure`).nth(i);
   const loaded = (img: Locator) => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0);
 
   test("each is served by this site, sized, described, captioned, lazy, and in full view once scrolled to", async ({ page }) => {
     await page.goto("/");
     expect(shown.length).toBeGreaterThan(0);
-    for (const p of shown) {
-      const img = page.locator(`#${p.id} figure img.visual`);
-      await expect(img).toHaveAttribute("src", new RegExp(`^visuals/${p.id}(-still)?\\.(svg|png|gif)$`));
-      await expect(img).toHaveAttribute("alt", p.visual_alt as string);
+    for (const item of shown) {
+      const { v, name } = item;
+      const img = at(page, item).locator("img.visual");
+      await expect(img).toHaveAttribute("src", new RegExp(`^visuals/${name}(-still)?\\.(svg|png|gif)$`));
+      await expect(img).toHaveAttribute("alt", v.alt);
       await expect(img).toHaveAttribute("loading", "lazy");
       const [w, h] = [Number(await img.getAttribute("width")), Number(await img.getAttribute("height"))];
-      expect(w > 0 && h > 0, p.id).toBe(true);
-      if (p.visual_caption) await expect(page.locator(`#${p.id} figcaption`)).toHaveText(p.visual_caption);
+      expect(w > 0 && h > 0, name).toBe(true);
+      if (v.caption) await expect(at(page, item).locator("figcaption")).toHaveText(v.caption);
       await img.scrollIntoViewIfNeeded();
-      await expect.poll(() => loaded(img), { message: p.id }).toBe(true);
-      // A raster image (a GIF's still included) is the size it says; an SVG's own size depends on the browser.
-      if (!p.urls.visual?.endsWith(".svg")) expect(await img.evaluate((i: HTMLImageElement) => [i.naturalWidth, i.naturalHeight]), p.id).toEqual([w, h]);
+      await expect.poll(() => loaded(img), { message: name }).toBe(true);
+      // A raster image (a GIF's still or the GIF itself) is the size it says; an SVG's own size depends on the browser.
+      if (!v.url.endsWith(".svg")) expect(await img.evaluate((i: HTMLImageElement) => [i.naturalWidth, i.naturalHeight]), name).toEqual([w, h]);
       await expect(img).toHaveCSS("opacity", "1");
     }
   });
@@ -135,12 +139,12 @@ test.describe("project visuals", () => {
   test("each holds its space before its file arrives, so nothing shifts when it does", async ({ page }) => {
     await page.route("**/visuals/**", () => {});
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    for (const p of shown) {
-      const img = page.locator(`#${p.id} img.visual`);
+    for (const item of shown) {
+      const img = at(page, item).locator("img.visual");
       const [w, h] = [Number(await img.getAttribute("width")), Number(await img.getAttribute("height"))];
       const box = await img.boundingBox();
-      expect(box?.width, p.id).toBeGreaterThan(200);
-      expect(Math.abs((box?.height ?? 0) - ((box?.width ?? 0) * h) / w), p.id).toBeLessThan(3);
+      expect(box?.width, item.name).toBeGreaterThan(200);
+      expect(Math.abs((box?.height ?? 0) - ((box?.width ?? 0) * h) / w), item.name).toBeLessThan(3);
     }
   });
 
@@ -153,38 +157,43 @@ test.describe("project visuals", () => {
   test("on paper every visual shows, none left mid-rise", async ({ page }) => {
     await page.emulateMedia({ media: "print" });
     await page.goto("/");
-    for (const p of shown) await expect(page.locator(`#${p.id} img.visual`), p.id).toHaveCSS("opacity", "1");
+    for (const item of shown) await expect(at(page, item).locator("img.visual"), item.name).toHaveCSS("opacity", "1");
   });
 
-  test("a moving visual holds its first frame until played, and stops when pressed again", async ({ page }) => {
+  test("a moving visual plays on its own, and its button stops it and plays it again", async ({ page }) => {
     expect(moving.length).toBeGreaterThan(0);
     await page.goto("/");
-    for (const p of moving) {
-      const img = page.locator(`#${p.id} img.visual`);
-      const play = page.locator(`#${p.id} button.play`);
-      await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
-      await expect(play).toHaveAccessibleName(`Play the demo of ${p.title}`);
-      await play.click();
-      await expect(img).toHaveAttribute("src", `visuals/${p.id}.gif`);
-      await expect(play).toHaveAccessibleName(`Stop the demo of ${p.title}`);
-      await expect.poll(() => loaded(img), { message: p.id }).toBe(true);
-      await play.click();
-      await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
-      await expect(play).toHaveAccessibleName(`Play the demo of ${p.title}`);
+    for (const item of moving) {
+      const { p, name } = item;
+      const img = at(page, item).locator("img.visual");
+      const button = at(page, item).locator("button.play");
+      await expect(img).toHaveAttribute("src", `visuals/${name}.gif`);
+      await expect(button).toHaveAccessibleName(`Stop the demo of ${p.title}`);
+      await img.scrollIntoViewIfNeeded();
+      await expect.poll(() => loaded(img), { message: name }).toBe(true);
+      await button.click();
+      await expect(img).toHaveAttribute("src", `visuals/${name}-still.gif`);
+      await expect(button).toHaveAccessibleName(`Play the demo of ${p.title}`);
+      await button.click();
+      await expect(img).toHaveAttribute("src", `visuals/${name}.gif`);
+      await expect(button).toHaveAccessibleName(`Stop the demo of ${p.title}`);
     }
   });
 
   test.describe("with reduced motion", () => {
     test.use({ reducedMotion: "reduce" });
 
-    test("nothing moves: no visual animates, and a GIF shows its first frame", async ({ page }) => {
+    test("nothing moves: no visual animates, and a GIF holds its first frame until played", async ({ page }) => {
       await page.goto("/");
-      for (const p of shown) {
-        const img = page.locator(`#${p.id} img.visual`);
+      for (const item of shown) {
+        const img = at(page, item).locator("img.visual");
         await img.scrollIntoViewIfNeeded();
-        await expect.poll(() => loaded(img), { message: p.id }).toBe(true);
-        if (moving.includes(p)) await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
-        expect(await img.evaluate((i) => getComputedStyle(i).animationName), p.id).toBe("none");
+        await expect.poll(() => loaded(img), { message: item.name }).toBe(true);
+        expect(await img.evaluate((i) => getComputedStyle(i).animationName), item.name).toBe("none");
+      }
+      for (const item of moving) {
+        await expect(at(page, item).locator("img.visual")).toHaveAttribute("src", `visuals/${item.name}-still.gif`);
+        await expect(at(page, item).locator("button.play")).toHaveAccessibleName(`Play the demo of ${item.p.title}`);
       }
     });
   });
@@ -194,9 +203,9 @@ test.describe("project visuals", () => {
 
     test("a moving visual stays on its first frame, with no button that cannot work", async ({ page }) => {
       await page.goto("/");
-      for (const p of moving) {
-        await expect(page.locator(`#${p.id} img.visual`)).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
-        await expect(page.locator(`#${p.id} button.play`)).toBeHidden();
+      for (const item of moving) {
+        await expect(at(page, item).locator("img.visual")).toHaveAttribute("src", `visuals/${item.name}-still.gif`);
+        await expect(at(page, item).locator("button.play")).toBeHidden();
       }
     });
   });
