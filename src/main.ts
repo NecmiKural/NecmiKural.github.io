@@ -43,28 +43,36 @@ if (power instanceof HTMLButtonElement && line) {
 }
 
 // The project list: collapsed in the page flow on narrow screens, a column beside the content on
-// wide ones (index.html), where it opens and marks the project being read: the last one whose
-// top has passed a line a third of the way down, or at the foot of the page, the one linked to.
+// wide ones (index.html), where it is open and marks the project being read: the last one whose
+// top has passed a line near the top of the window; at the foot of the page, the one linked to if
+// it is in view, else the last.
 const toc = document.getElementById("toc");
-if (toc instanceof HTMLDetailsElement && matchMedia("(min-width: 1080px)").matches) {
-  toc.open = true;
+if (toc instanceof HTMLDetailsElement) {
+  const wide = matchMedia("(min-width: 1080px)");
   const links = [...toc.querySelectorAll("a")];
   const articles = links.map((a) => document.getElementById(a.hash.slice(1)));
   let queued = false;
   const mark = () => {
     queued = false;
-    const seen = (el: HTMLElement | null) => !!el && el.getBoundingClientRect().top <= innerHeight / 3;
-    let i = articles.findLastIndex(seen);
-    const target = links.findIndex((a) => a.hash === location.hash);
-    const foot = scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
-    if (foot && target >= 0 && (articles[target]?.getBoundingClientRect().top ?? innerHeight) < innerHeight) i = target;
+    const line = Math.min(innerHeight / 3, 120); // a short article must not hand the mark to the next
+    let i = wide.matches ? articles.findLastIndex((el) => !!el && el.getBoundingClientRect().top <= line) : -1;
+    if (wide.matches && scrollY + innerHeight >= document.documentElement.scrollHeight - 2) {
+      const target = links.findIndex((a) => a.hash === location.hash);
+      const box = articles[target]?.getBoundingClientRect();
+      i = box && box.bottom > 0 && box.top < innerHeight ? target : links.length - 1;
+    }
     links.forEach((a, j) => (j === i ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current")));
   };
   const later = () => {
     if (!queued) requestAnimationFrame(mark);
     queued = true;
   };
+  const fit = () => {
+    toc.open = wide.matches;
+    mark();
+  };
   addEventListener("scroll", later, { passive: true });
   addEventListener("hashchange", later);
-  mark();
+  wide.addEventListener("change", fit);
+  fit();
 }

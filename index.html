@@ -67,12 +67,13 @@ h3 { font-size: 1.35rem; line-height: 1.25; margin: 0; }
 #toc span { display: block; margin: .9rem 0 .2rem; font: .7rem/1.35 var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
 #toc a { display: block; padding: .2rem 0 .2rem .65rem; border-left: 2px solid var(--rule); color: var(--fg); text-decoration: none; }
 #toc a:hover { color: var(--link); border-left-color: var(--link); }
+#toc a:focus-visible { outline-offset: -3px; } /* inside the list, which clips what overflows it */
 #toc a[aria-current] { border-left: 3px solid var(--accent); padding-left: .6rem; font-weight: 600; }
 @media (min-width: 1080px) {
   body { max-width: calc(72ch + 17rem); display: grid; grid-template-columns: 14rem minmax(0, 72ch); column-gap: 3rem; }
   body > :not(nav) { grid-column: 2; }
   body > nav { grid-column: 1; grid-row: 1 / span 3; }
-  #toc { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; margin: 0; padding-block: 5rem 1rem; }
+  #toc { position: sticky; top: 0; box-sizing: border-box; max-height: 100vh; max-height: 100dvh; overflow-y: auto; margin: 0; padding-block: 5rem 1rem; }
   #toc[open] > summary { display: none; }
 }
 footer { margin-top: 2rem; }
