@@ -37,6 +37,16 @@ h1 { font-size: clamp(2.4rem, 1.6rem + 4vw, 3.6rem); line-height: 1.05; letter-s
 .cta.primary, .cta:hover { background: var(--fg); color: var(--bg); }
 .cta.primary:hover { background: transparent; color: var(--fg); }
 .cta:focus-visible { border-radius: 999px; }
+/* On the narrowest phones the hero tightens, so its links still show without scrolling. */
+@media (max-width: 399px) {
+  header { padding-top: 1.25rem; }
+  .headline { font-size: 1.05rem; line-height: 1.4; }
+  .headline + p { font-size: .9rem; line-height: 1.5; }
+  .ctas { margin-top: .9rem; }
+  .cta { padding: .35rem .95rem; }
+  header .links { gap: .35rem; margin-top: 1rem; }
+  header .links a { padding: .2rem .6rem; }
+}
 .latest { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; margin: .75rem 0 0; color: var(--muted); font-size: .85rem; }
 .latest .label { font: 600 .7rem/1.6 var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--accent); }
 /* "Try it" (scripts/render.ts): a table, and on phones one block per row with its labels. */
