@@ -59,7 +59,7 @@ test("focus order: header links, Open in 3D, then the rail; arrows, Home and End
   await expect(rail(page, ids.at(-2) as string)).toBeFocused();
   // Before the rail, in reverse: the toolbar.
   await page.keyboard.press("Home");
-  for (const name of ["Power off", "Low power", "Sound", "Signal Box", "Glovebox", "Switchboard", "Replay Deck"]) {
+  for (const name of ["Power off", "Low power", "Sound", "Signal Box", "Glovebox", "Switchboard", "Replay Deck", "Lab"]) {
     await page.keyboard.press("Shift+Tab");
     await expect(bar(page, name)).toBeFocused();
   }
@@ -68,18 +68,18 @@ test("focus order: header links, Open in 3D, then the rail; arrows, Home and End
   await expect(page.locator("#power")).toBeFocused();
 });
 
-test("Replay Deck is the default; the switcher loads each scene's chunk on demand and keeps the choice", async ({ page }) => {
+test("Lab is the default; the switcher loads each scene's chunk on demand and keeps the choice", async ({ page }) => {
   const chunks: string[] = [];
   page.on("request", (r) => chunks.push(new URL(r.url()).pathname));
   await powerOn(page);
-  await expect(bar(page, "Replay Deck")).toHaveAttribute("aria-pressed", "true");
+  await expect(bar(page, "Lab")).toHaveAttribute("aria-pressed", "true");
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "false");
-  const others = SCENES.filter((s) => s !== "replay-deck");
+  const others = SCENES.filter((s) => s !== "lab");
   expect(chunks.filter((c) => others.some((s) => c.includes(`/${s}-`)))).toEqual([]); // nothing loads unasked
   const before = await frames(page);
   await bar(page, "Switchboard").click();
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "true");
-  await expect(bar(page, "Replay Deck")).toHaveAttribute("aria-pressed", "false");
+  await expect(bar(page, "Lab")).toHaveAttribute("aria-pressed", "false");
   expect(chunks.filter((c) => c.includes("/switchboard-"))).toHaveLength(1);
   await expect.poll(() => frames(page)).toBeGreaterThan(before);
   // The new scene works: a project opens and closes in it.
@@ -107,7 +107,7 @@ test("a project chosen while 3D mode loads opens once the scene is in; a switch 
     // The scene's chunk waits at the gate, so the choice is made before the scene exists.
     let open = () => {};
     const gate = new Promise<void>((r) => (open = r));
-    await page.route(/\/replay-deck-[^/]*\.js$/, async (route) => {
+    await page.route(/\/lab-[^/]*\.js$/, async (route) => { // the default scene
       await gate;
       await route.continue();
     });
@@ -190,6 +190,72 @@ test("without WebGL 2 the page says so, loads no 3D code and keeps focus", async
   await expect(page.locator("#power")).toBeFocused();
   await expect(page.locator("#deck")).toHaveCount(0);
   expect(chunks).toEqual([]);
+});
+
+// The Lab's own promises: pixel art at every size, a HUD with the page's real counts, and the sample
+// on the bench staying there, and named, while the visitor points at others.
+test.describe("lab", () => {
+  const caption = (page: Page) => page.locator("#deck canvas");
+  const flagships = data.projects.filter((p) => p.group === "flagship").length;
+
+  test("renders 320 pixels across, scaled up without smoothing, at every window size", async ({ page }) => {
+    await powerOn(page, "lab");
+    const canvas = page.locator("#deck canvas");
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 1920, height: 960 },
+      { width: 1024, height: 768 },
+      { width: 606, height: 800 }, // widths where scaling the pixel ratio came out at 319
+      { width: 961, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect.poll(() => canvas.evaluate((c: HTMLCanvasElement) => c.width), { message: `${viewport.width} wide` }).toBe(320);
+      await expect(canvas).toHaveCSS("image-rendering", "pixelated");
+    }
+  });
+
+  test("the HUD shows the page's own counts", async ({ page }) => {
+    await powerOn(page, "lab");
+    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`INVENTORY: ${data.projects.length} PROJECTS\\nSAMPLES: ${flagships} FLAGSHIPS\\nLAB: OPEN`));
+  });
+
+  test("the sample on the bench stays there, and named, while another is pointed at", async ({ page }) => {
+    // A fake clock holds the assay part way, whatever the speed of the machine.
+    await page.clock.install();
+    await powerOn(page, "lab");
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+    // pauseAt fires each due callback once, at the new time: let frames and the timers queued after
+    // them run, as they would in a browser, before the assay starts.
+    await page.clock.runFor(100);
+    const [a, b] = data.projects; // both flagships, on the top shelf
+    await expect(rail(page, a.id)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.clock.runFor(600); // the flask has landed and the drops are falling
+    await page.keyboard.press("ArrowDown");
+    await page.clock.runFor(200); // the pointed-at flask has hopped; the assay is still running
+    await expect(rail(page, b.id)).toBeFocused();
+    await expect(held(page)).toHaveAttribute("data-held", a.id);
+    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`${a.title.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*ASSAY: RUNNING`));
+    // Where each flask is: the pointer finds the sample on the bench well below the shelf.
+    const rows = await page.evaluate(() => {
+      const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+      const r = c.getBoundingClientRect();
+      const found: Record<string, number[]> = {};
+      for (let gy = 1; gy < 60; gy++) {
+        for (let gx = 1; gx < 80; gx++) {
+          c.dispatchEvent(new PointerEvent("pointermove", { clientX: r.left + (r.width * gx) / 80, clientY: r.top + (r.height * gy) / 60, bubbles: true }));
+          const id = c.dataset.pointed;
+          if (id) (found[id] ??= []).push(gy / 60);
+        }
+      }
+      return Object.fromEntries(Object.entries(found).map(([id, ys]) => [id, ys.reduce((x, y) => x + y) / ys.length]));
+    });
+    expect(rows[a.id], "the sample on the bench").toBeGreaterThan(rows[b.id] + 0.15);
+    await page.clock.resume();
+    await expect(page.locator("#panel-title")).toBeFocused();
+    await expect(page.locator("#panel-title")).toHaveAccessibleName(a.title);
+    await expect(caption(page)).toHaveAttribute("data-caption", /ASSAY: DONE/); // the titration ran; no verdict claimed
+  });
 });
 
 for (const scene of SCENES) {

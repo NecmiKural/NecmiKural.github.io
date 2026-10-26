@@ -21,7 +21,7 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 
 A scene implements `Scene` in `src/engine/types.ts` (`build`, `layout`, `focus`, `insert`, `eject`, `dispose`), lives in `src/scenes/<id>.ts` and is listed in `SCENES` in `boot.ts`. Each scene is its own chunk; the choice is kept in `localStorage` as `nk.scene`. Helpers the scenes share (toon materials, outlines, atlas planes, the camera fit, group colours) are in `src/engine/kit.ts`. The 3D tests run once for every file in `src/scenes`, and `check-size` budgets each scene.
 
-Order: Replay Deck (default), then Switchboard, Glovebox and Signal Box (all 26 October 2026), each on its own branch and merged only when every test passes.
+Order: Replay Deck (the first default), then Switchboard, Glovebox and Signal Box, and the Lab, which became the default (all 26 October 2026), each on its own branch and merged only when every test passes. A scene can set `pixelWidth` to render that many pixels across, scaled up without smoothing (the Lab uses 320).
 
 ## Replay Deck (26 October 2026)
 
@@ -157,6 +157,40 @@ Kept away from: any railway's livery or logos, a locomotive with a face, and the
 | Running | eight noise chuffs that come closer together |
 | Arrived | triangle 784 Hz, then 659 Hz |
 
+## Lab (26 October 2026), the default
+
+**Idea.** A chemistry lab, for a chemistry background. Each project is a sample flask on the shelves. Choosing one takes it to the bench under a burette: three drops, the liquid turns at the endpoint, and the terminal prints the assay. A titration ends at a measured endpoint, as the projects' numbers come from runs that can be replayed.
+
+**Look.** An 80s pixel-art game: the scene renders 320 pixels across and the browser scales it up without smoothing; three-band toon shading; a small palette of CRT green, amber, wood and a little neon. It matches the profile README's banner, which is a lab bench too: the flagship samples take the banner's accent for the visitor's colour scheme (#C2410C light, #FB923C dark); the room is dark in both, so lettering and the cursor take #FB923C, which reads on it. The wall sign uses the banner's 5x7 glyphs, lit over faint unlit dots, one texel a dot (gaps between dots would be finer than the 320-pixel grid). A game HUD in the site's 5x7 dot-matrix (the profile banner's hand-made glyphs, extended to the rest of the alphabet) shows real data only: "INVENTORY: 13 PROJECTS", "SAMPLES: 3 FLAGSHIPS", "LAB: OPEN", and for the sample on the bench (else the one pointed at) its title, group, tag or commit and the assay state, RUNNING then DONE: the titration ran, and no pass or fail is claimed. Nothing made up, such as levels or scores. The scene is framed in the band between the HUD bars; a window under 100 pixels tall gets no HUD. When the terminal's screen covers fewer pixels than its text needs, it shows bars for the lines instead of broken letters. For the tests, the HUD's text is on the canvas as `data-caption`.
+
+**Scene.** A tiled floor and a dark wall with a dot-matrix "LAB" sign; shelves on the wall, one per group (flagships on top), with flasks whose liquid is the group colour; a long bench with a burette on its stand and a white tile, a wide beige CRT terminal with no chin, and a keyboard; a fume hood with its sash drawn as edges, a neon strip light and three vessels of different heights. A pixel arrow marks the chosen flask, which hops a little. Wide views take in the fume hood; narrow ones frame the shelves, burette and terminal.
+
+| Element | Colour |
+|---|---|
+| Banner accent: flagship samples in the light and dark scheme | #C2410C, #FB923C |
+| Banner accent, lighter: sign, cursor, HUD flagship count | #FB923C |
+| CRT green, dim green | #39FF6A, #145C2A |
+| Amber (HUD) | #FFB000 |
+| Neon (strip light, endpoint), neon cyan (titrant) | #FF4FD8, #3EE8FF |
+| Wood, worktop | #8A5A33, #3A2B20 |
+| Wall | #1D2433 |
+| Glass | #B9E4EF |
+| Terminal housing | #CBB994 |
+
+Kept away from: a face. The terminal is a wide beige box with a screen and no chin (not a compact desktop's shape) that shows text only, among other bench equipment, with no face, arms or legs and none of a known character's colours. The fume hood holds three vessels of different heights, so no pair sits in the sash's frame like eyes. No game's sprites, fonts or sounds.
+
+**Motion.** About 1.1 s: the flask to the bench (450 ms), three drops (330 ms) while the liquid turns, then the terminal types (300 ms). Eject returns the flask in 400 ms. A second Enter skips to the end; with reduced motion every step is a cut.
+
+**Sound.** Off by default; at most 4 tones per motif.
+
+| Event | Voices |
+|---|---|
+| Lift | square 330 to 660 Hz, 60 ms |
+| Drop | triangle 1320 to 990 Hz, 40 ms, once per drop |
+| Endpoint | square 587, 740, 659, 880 Hz |
+| Typing | six noise ticks |
+| Put back | square 660 to 330 Hz, 80 ms |
+
 ## "Who is this?" test
 
 Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-dark.png` and `<scene>-panel-*.png` screenshots in the CI `reports` artifact) and ask: "Does this remind you of any product, character or game?" If anyone names one, change the silhouette or the palette and test again. Write the answers here in general terms; if someone names something, write "named a product" or "named a character" and keep the name out of this file.
@@ -167,5 +201,6 @@ Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-da
 | 26 October 2026 | Switchboard | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 | 26 October 2026 | Glovebox | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 | 26 October 2026 | Signal Box | 0 of 5 | Pending: asked Necmi to run the test | None yet |
+| 26 October 2026 | Lab | 0 of 5 | Pending: asked Necmi to run the test | None yet |
 
 A scene is not final until 5 people have answered with no recognitions.
