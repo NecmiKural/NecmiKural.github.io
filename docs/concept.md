@@ -12,7 +12,7 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 
 ## Engine (26 October 2026)
 
-`src/main.ts` is the only script on page load. On desktops and tablets it opens 3D mode after the HTML page has painted (from 26 October 2026; before that, only on request). Phones, reduced motion, Save-Data, no WebGL 2, a visitor who powered 3D mode off (`nk.3d=off`) and one who has already started on the page (a project's link, a scroll, a focus move) stay on the HTML page, where "Open in 3D" checks for WebGL 2 and loads `src/engine/boot.ts`, which owns everything the scenes share:
+`src/main.ts` is the only script on page load. "Open in 3D" checks for WebGL 2 and loads `src/engine/boot.ts`, which owns everything the scenes share. 3D mode opened on its own on desktops and tablets for part of 26 October 2026; visitors found landing in a scene without knowing where they were confusing, so it is on request again, and the HTML page gained a project list beside the content instead. The engine owns:
 
 - the full-screen dialog with the toolbar (scene switcher with `aria-pressed`, Sound, Low power, Power off) and the rail;
 - the project panel, a nested `<dialog>` whose heading takes focus;

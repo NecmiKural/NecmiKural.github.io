@@ -17,11 +17,6 @@ const bar = (page: Page, name: string) => page.locator("#deck .bar").getByRole("
 const frames = async (page: Page) => Number(await page.locator("#deck canvas").getAttribute("data-frames"));
 const held = (page: Page) => page.locator("#deck canvas"); // data-held: the project the scene holds
 
-// These start 3D mode with the button, so it must not open on its own first (see auto.spec.ts).
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("nk.3d", "off"));
-});
-
 // With a scene id, also checks that this scene is the one running: a scene that fails to load or
 // is not registered falls back to the default, which would otherwise pass its tests.
 async function powerOn(page: Page, scene?: string) {
@@ -150,6 +145,31 @@ test("a project chosen while 3D mode loads opens once the scene is in; a switch 
     await expect(title).toHaveAccessibleName(data.projects[2].title);
     await expect(bar(page, "Replay Deck")).toHaveAttribute("aria-pressed", "true");
     await expect(held(page)).toHaveAttribute("data-held", ids[2]);
+  });
+});
+
+test("3D mode opens only when asked: nothing opens or loads on its own", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForLoadState("load");
+  await page.waitForTimeout(1500);
+  await expect(page.locator("#deck")).toHaveCount(0);
+  const boot = await page.evaluate(() => performance.getEntriesByType("resource").some((e) => /\/assets\/boot-/.test(e.name)));
+  expect(boot).toBe(false);
+});
+
+test.describe("on a phone", () => {
+  // A phone's screen is its own size; the desktop profile this project starts from has a large one.
+  const viewport = { width: 390, height: 844 };
+  test.use({ viewport, screen: viewport, hasTouch: true, isMobile: true });
+
+  test("Open in 3D is a large button that works", async ({ page }) => {
+    await page.goto("/");
+    const button = page.locator("#power");
+    const box = (await button.boundingBox()) as { width: number; height: number };
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.width).toBeGreaterThan(300);
+    await button.tap();
+    await expect(page.locator("#deck [role=status]")).toHaveText(/3D mode on/);
   });
 });
 
