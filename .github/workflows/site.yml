@@ -14,7 +14,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,15 +32,32 @@ jobs:
         env:
           PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
       - run: npm run size
-      # The Ubuntu package mirror sometimes goes silent mid-install. Killing apt from outside leaves
-      # it holding the dpkg lock, so apt handles the stall itself: after 30 s without data it drops
-      # the connection and tries again or moves to the next mirror in the list.
-      - name: Install browser system packages
-        timeout-minutes: 10
+      # The browsers' system packages are about 120 MB from the Ubuntu mirror, which now and then
+      # crawls at 100 KB/s (run 40261475018). apt is not killed and retried, which left it holding
+      # the dpkg lock; instead its .deb files are cached, so a run downloads only what changed.
+      - name: Cache key for the browsers' system packages
+        id: debs-key
         run: |
-          printf 'Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "5";\n' |
-            sudo tee /etc/apt/apt.conf.d/99-stalled-mirror
+          echo "prefix=debs-$ImageOS-" >> "$GITHUB_OUTPUT"
+          echo "key=debs-$ImageOS-$ImageVersion-playwright-$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: debs
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.debs-key.outputs.key }}
+          restore-keys: ${{ steps.debs-key.outputs.prefix }}
+      - name: Install browser system packages
+        timeout-minutes: 25
+        run: |
+          mkdir -p ~/apt-debs/partial
+          echo "Dir::Cache::Archives \"$HOME/apt-debs\";" | sudo tee /etc/apt/apt.conf.d/zzz-site-debs
           npx playwright install-deps chromium firefox webkit
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-debs # apt leaves them root-owned; the cache saves as this user
+      - if: steps.debs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.debs-key.outputs.key }}
       # The browsers come from Playwright's own servers and touch no system package, so a stalled
       # download can be killed and tried again.
       - name: Install browsers
