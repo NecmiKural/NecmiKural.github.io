@@ -220,15 +220,35 @@ test.describe("lab", () => {
   });
 
   test("the sample on the bench stays there, and named, while another is pointed at", async ({ page }) => {
+    // A fake clock holds the assay part way, whatever the speed of the machine.
+    await page.clock.install();
     await powerOn(page, "lab");
-    const [a, b] = data.projects;
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+    const [a, b] = data.projects; // both flagships, on the top shelf
     await expect(rail(page, a.id)).toBeFocused();
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(600); // the flask has landed and the drops are falling
+    await page.clock.runFor(600); // the flask has landed and the drops are falling
     await page.keyboard.press("ArrowDown");
+    await page.clock.runFor(200); // the pointed-at flask has hopped; the assay is still running
     await expect(rail(page, b.id)).toBeFocused();
     await expect(held(page)).toHaveAttribute("data-held", a.id);
-    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(a.title.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    await expect(caption(page)).toHaveAttribute("data-caption", new RegExp(`${a.title.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*ASSAY: RUNNING`));
+    // Where each flask is: the pointer finds the sample on the bench well below the shelf.
+    const rows = await page.evaluate(() => {
+      const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+      const r = c.getBoundingClientRect();
+      const found: Record<string, number[]> = {};
+      for (let gy = 1; gy < 60; gy++) {
+        for (let gx = 1; gx < 80; gx++) {
+          c.dispatchEvent(new PointerEvent("pointermove", { clientX: r.left + (r.width * gx) / 80, clientY: r.top + (r.height * gy) / 60, bubbles: true }));
+          const id = c.dataset.pointed;
+          if (id) (found[id] ??= []).push(gy / 60);
+        }
+      }
+      return Object.fromEntries(Object.entries(found).map(([id, ys]) => [id, ys.reduce((x, y) => x + y) / ys.length]));
+    });
+    expect(rows[a.id], "the sample on the bench").toBeGreaterThan(rows[b.id] + 0.15);
+    await page.clock.resume();
     await expect(page.locator("#panel-title")).toBeFocused();
     await expect(page.locator("#panel-title")).toHaveAccessibleName(a.title);
     await expect(caption(page)).toHaveAttribute("data-caption", /ASSAY: DONE/); // the titration ran; no verdict claimed

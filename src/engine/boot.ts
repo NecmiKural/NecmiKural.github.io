@@ -211,6 +211,7 @@ export async function boot(o: BootOptions): Promise<void> {
     if (closed) return;
     scene?.dispose();
     hold(null);
+    delete o.canvas.dataset.caption; // the old scene's text
     scene = create(stage);
     scene.build(projects);
     scene.focus(highlighted);

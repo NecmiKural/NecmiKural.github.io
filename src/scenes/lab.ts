@@ -186,8 +186,13 @@ export const create: CreateScene = (stage) => {
   const crt = pixelCanvas(36, 24);
   textures.push(crt.texture);
   let shown = "";
+  let screenLines: string[] = [];
+  let screenChars = Infinity;
+  let small = false; // the screen covers fewer pixels than its text needs: bars stand for the lines
   const terminal = (lines: string[], chars = Infinity) => {
-    const key = `${lines.join("\n")}|${chars}`;
+    screenLines = lines;
+    screenChars = chars;
+    const key = `${lines.join("\n")}|${chars}|${small}`;
     if (key === shown) return;
     shown = key;
     crt.g.fillStyle = SCREEN;
@@ -196,7 +201,12 @@ export const create: CreateScene = (stage) => {
     lines.slice(0, 3).forEach((line, i) => {
       const part = line.slice(0, Math.max(0, Math.min(6, left)));
       left -= Math.min(6, line.length);
-      drawText(crt.g, part, 0, i * 8, 1, i === 0 ? AMBER : GREEN);
+      const colour = i === 0 ? AMBER : GREEN;
+      if (!small) drawText(crt.g, part, 0, i * 8, 1, colour);
+      else if (part) {
+        crt.g.fillStyle = colour;
+        crt.g.fillRect(0, i * 8 + 1, part.length * ADVANCE - 1, 5);
+      }
     });
     crt.texture.needsUpdate = true;
     stage.invalidate();
@@ -303,7 +313,7 @@ export const create: CreateScene = (stage) => {
       if (status) line(status, PIXELS - 4 - status.length * ADVANCE, h - 9, status === DONE ? GREEN : AMBER);
     }
     hud.texture.needsUpdate = true;
-    stage.caption(lines.join("\n"));
+    stage.caption(hudPlane.visible ? lines.join("\n") : "");
     stage.invalidate();
   };
 
@@ -361,8 +371,10 @@ export const create: CreateScene = (stage) => {
 
     layout(next) {
       aspect = next;
-      // The HUD texture matches the render target, PIXELS wide, so each dot is one screen pixel.
-      const h = Math.max(60, Math.round(PIXELS / aspect));
+      // The HUD texture matches the render target, PIXELS wide, so each dot is one screen pixel. In a
+      // very short window the bars would leave no room for the scene, so there is no HUD.
+      const h = Math.max(1, Math.round(PIXELS / aspect));
+      hudPlane.visible = h >= 100;
       if (hud.canvas.height !== h) {
         // A new texture: an uploaded one cannot change size in place.
         hud.texture.dispose();
@@ -379,7 +391,7 @@ export const create: CreateScene = (stage) => {
       cursor.visible = pointed;
       if (aspect >= 1.25) boxes.push(drawnBox(hood));
       // Framed in the band between the HUD bars: the same width, a shorter height.
-      const band = (h - 2 * BAR) / h;
+      const band = hudPlane.visible ? (h - 2 * BAR) / h : 1;
       const fov = camera.fov;
       camera.fov = (Math.atan(Math.tan((fov * Math.PI) / 360) * band) * 360) / Math.PI;
       fit(camera, boxes, aspect / band, VIEW);
@@ -390,6 +402,10 @@ export const create: CreateScene = (stage) => {
       const height = 2 * distance * Math.tan((camera.fov * Math.PI) / 360);
       hudPlane.scale.set(height * aspect, height, 1);
       hudPlane.position.set(0, 0, -distance);
+      // How many pixels the terminal's screen covers decides between text and bars.
+      const edge = (x: number) => new Vector3(x, screen.position.y, screen.position.z).project(camera).x;
+      small = ((edge(CRT.x + 0.6) - edge(CRT.x - 0.6)) / 2) * PIXELS < 36;
+      terminal(screenLines, screenChars);
       drawHud();
     },
 
