@@ -1,8 +1,9 @@
 // Signal Box. A lever frame looks out over a small railway yard: a main line that fans into one
 // siding per group, with a platform and a board for every project. Pulling a lever sets the
 // route: the interlocking lamps tick on one by one, the signal arm drops and a short train runs to
-// that project's platform. An interlocking refuses a conflicting route the way code refuses a bad
-// proposal. Procedural geometry and canvas-drawn labels only; no railway's livery or logos.
+// that project's platform. The interlocking checks the route before anything moves, as code checks
+// a proposal before it is accepted. Procedural geometry and canvas-drawn labels only; no
+// railway's livery or logos.
 
 import {
   BoxGeometry,
@@ -66,7 +67,8 @@ const MAIN_Z = -2.1;
 const SIDING_Z = (row: number) => -0.6 - row * 1; // flagships nearest
 const STOP_X = (col: number) => -1.4 + col * 0.85;
 const CAR = 0.65; // spacing along the track, loco and wagons
-const IDLE_X = -5.3; // where the loco waits, on the stretch every route shares
+const IDLE_X = -5.5; // where the loco waits: inside the stretch every route shares (see route)
+const SIDING_END = (cols: number) => Math.max(2.8, STOP_X(cols - 1) + 0.8); // room for every stop
 const LAMPS = 5;
 const ARM_CLEAR = 0.6;
 
@@ -105,17 +107,22 @@ const noise = (n: number) => {
   return x - Math.floor(x);
 };
 
-// The centre line of the route to a siding: shared straight track first, so the idle train sits
-// in the same place whatever the route, then the fan, then the siding.
-const route = (z: number) =>
+// The centre line of the route to a siding. A Catmull-Rom segment depends on the two points
+// either side of it, so the segments up to x = -5.4 (four points on the main line) are the same
+// on every route, and the idle train there sits in exactly the same pose whatever the route.
+// Then the fan, and a siding kept straight past x = -1.8 so every platform is the same distance
+// from the train.
+const route = (z: number, end: number) =>
   new CatmullRomCurve3([
+    new Vector3(-7.2, 0, MAIN_Z),
     new Vector3(-6.6, 0, MAIN_Z),
     new Vector3(-6.0, 0, MAIN_Z),
     new Vector3(-5.4, 0, MAIN_Z),
     new Vector3(-4.8, 0, MAIN_Z),
     new Vector3(-3.6, 0, (MAIN_Z + z) / 2),
     new Vector3(-2.4, 0, z),
-    new Vector3(2.8, 0, z),
+    new Vector3(-1.8, 0, z),
+    new Vector3(end, 0, z),
   ]);
 
 // The arc-length position (0..1) where the curve reaches x.
@@ -238,7 +245,7 @@ export const create: CreateScene = (stage) => {
   const scenery: Object3D[] = [];
   let focused: string | null = null;
   let playing: string | null = null;
-  let current = route(MAIN_Z);
+  let current = route(MAIN_Z, 2.8);
   let position = 0; // the loco's arc position on `current`
 
   // Puts the loco at arc position u on the curve, the wagons behind it, each facing along the track.
@@ -327,9 +334,10 @@ export const create: CreateScene = (stage) => {
       const sleepers: { p: Vector3; angle: number }[] = [];
       const posts: BufferGeometry[] = [];
       const platforms: BufferGeometry[] = [];
+      const end = SIDING_END(Math.max(...rows.map((r) => r.length)));
       groups.forEach((g, row) => {
         const z = SIDING_Z(row);
-        const curve = route(z);
+        const curve = route(z, end);
         routes.set(g, curve);
         const samples = curve.getSpacedPoints(80);
         for (const side of [-0.1, 0.1]) {
@@ -358,10 +366,11 @@ export const create: CreateScene = (stage) => {
           const x = STOP_X(col);
           stops.set(p.id, atX(curve, x));
           platforms.push(new BoxGeometry(0.8, 0.14, 0.28).translate(x, 0.07, z + 0.36));
-          posts.push(new CylinderGeometry(0.025, 0.025, 0.5, 6).translate(x, 0.39, z + 0.42));
+          // The board stands high enough that the stopped train shows under it from the camera.
+          posts.push(new CylinderGeometry(0.025, 0.025, 0.95, 6).translate(x, 0.615, z + 0.42));
           const i = projects.indexOf(p);
           const sign = new Mesh(face(0.62, 0.31, board(i)), labelled);
-          sign.position.set(x, 0.72, z + 0.44);
+          sign.position.set(x, 1.1, z + 0.44);
           sign.userData.id = p.id;
           yard.add(sign);
           boards.push(sign);
@@ -384,8 +393,8 @@ export const create: CreateScene = (stage) => {
         sleeperMesh.setMatrixAt(k, place.matrix);
       });
       const zs = groups.map((_, row) => SIDING_Z(row));
-      const ballast = new BoxGeometry(9.8, 0.04, Math.max(...zs) - Math.min(...zs) + 1.2).translate(
-        -1.9,
+      const ballast = new BoxGeometry(end + 7.7, 0.04, Math.max(...zs) - Math.min(...zs) + 1.2).translate(
+        (end - 7.5) / 2,
         0.02,
         (Math.max(...zs) + Math.min(...zs)) / 2,
       );
@@ -403,7 +412,7 @@ export const create: CreateScene = (stage) => {
       const crowns = new InstancedMesh(new IcosahedronGeometry(0.34, 0).translate(0, 0.45, 0), toon("#6a9a4a"), trees);
       for (let k = 0; k < trees; k++) {
         const behind = k < 10;
-        const x = behind ? -6 + k * 0.95 + noise(k) * 0.4 : 3.4 + noise(k) * 0.6;
+        const x = behind ? -6 + k * 0.95 + noise(k) * 0.4 : end + 0.6 + noise(k) * 0.6;
         const z = behind ? Math.min(...zs) - 0.9 - noise(k + 50) * 0.6 : Math.max(...zs) - (k - 10) * 0.7;
         place.position.set(x, 0, z);
         place.rotation.set(0, noise(k + 9) * 3, 0);

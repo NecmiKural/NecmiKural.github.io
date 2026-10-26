@@ -126,7 +126,7 @@ Kept away from: a face. An early draft had two ports with the gauge above them, 
 
 ## Signal Box (26 October 2026)
 
-**Idea.** A model-railway signal box. Each project is a lever. Pulling one sets a route: the interlocking checks it lamp by lamp, the signal arm drops and a short train runs to that project's platform. An interlocking refuses a conflicting route the way code refuses a bad proposal; the train is a nod to streams of data, and to Hamilton as a rail junction.
+**Idea.** A model-railway signal box. Each project is a lever. Pulling one sets a route: the interlocking checks it lamp by lamp, the signal arm drops and a short train runs to that project's platform. The interlocking checks the route before anything moves, as code checks a proposal before it is accepted; the train is a nod to streams of data, and to Hamilton as a rail junction.
 
 **Scene.** In front, a wooden lever frame with one lever per project, a numbered plate under each, and a shelf with a block display and five route lamps. Behind it, a small yard on farmland under a warm sky: a main line that fans into one siding per group (flagships nearest), a signal where each siding leaves the fan, and a platform with a board (number, name, tag or commit) for every project. Low-poly trees stand round the yard. The camera never moves. When the view is clearly wider than tall the tracks run across the view; otherwise the yard turns so they run away from the frame, sidings side by side, and the boards turn to face the frame.
 

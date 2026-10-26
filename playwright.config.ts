@@ -21,7 +21,8 @@ export default defineConfig({
     {
       name: "3d",
       testMatch: /deck\.spec\.ts/,
-      // Software rendering is slow, and a scene's load animation can take 2 s; leave room.
+      // Software rendering is slow: a heavy scene's frames take about 0.3 s each, so a 1.6 s load
+      // can take over 4 s to finish. Timing claims are checked by their own assertions.
       timeout: 60_000,
       expect: { timeout: 10_000 },
       use: {
