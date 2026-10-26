@@ -11,11 +11,19 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
   let raf = 0;
   let snap = false;
   let stopped = false;
+  // When the tweens that ended this frame ended. The steps that follow them are asked for in
+  // promise callbacks, after the frame and before any other task, which then clears it.
+  let ended: number | null = null;
+  const forget = () => {
+    ended = null;
+  };
 
   const frame = (now: number) => {
     raf = 0;
+    ended = null;
     try {
       for (const task of [...tasks]) if (task(now)) tasks.delete(task);
+      if (ended !== null) setTimeout(forget);
       if (dirty) {
         dirty = false;
         render();
@@ -39,14 +47,29 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
       invalidate();
       return Promise.resolve();
     }
+    // The clock starts when the tween is asked for, not at the next frame, and the next step of a
+    // sequence starts where the last one ended, not at the frame that saw it end. A step that slow
+    // frames have already carried past ends at once. A sequence then takes its designed time plus
+    // about a frame, however slow the frames are.
+    const start = ended ?? performance.now();
+    if (performance.now() - start >= ms) {
+      step(1);
+      invalidate();
+      // After this turn, so steps asked for alongside this one still start where it did.
+      queueMicrotask(() => {
+        ended = Math.max(ended ?? 0, start + ms);
+      });
+      return Promise.resolve();
+    }
     return new Promise((done) => {
-      let start = -1;
       tasks.add((now) => {
-        if (start < 0) start = now;
-        const t = snap ? 1 : Math.min(1, (now - start) / ms);
+        const t = snap ? 1 : Math.min(1, Math.max(0, now - start) / ms);
         step(ease(t));
         dirty = true;
-        if (t === 1) done();
+        if (t === 1) {
+          ended = Math.max(ended ?? 0, Math.min(start + ms, now));
+          done();
+        }
         return t === 1;
       });
       invalidate();
