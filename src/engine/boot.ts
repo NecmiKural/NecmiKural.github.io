@@ -223,21 +223,24 @@ export async function boot(o: BootOptions): Promise<void> {
     title.focus();
   };
 
+  // Queued behind whatever is running, a scene still loading included, and played on the scene
+  // that is current when its turn comes, so a choice made during a load or a switch is kept.
   const activate = async (id: string) => {
-    const s = scene;
-    if (!s) return;
     if (running && target === id) {
       loop.skip(true); // a second Enter on the same project skips to the end
       return;
     }
     target = id;
     await run(async () => {
-      if (target !== id || inWell === id) return; // superseded while queued, or already loaded
+      const s = scene;
+      if (!s || target !== id || inWell === id) return; // superseded while queued, or already loaded
       if (inWell) await s.eject();
       hold(id);
       await s.insert(id);
     });
-    if (target === id && !closed && !panel.open && scene === s) openPanel(id);
+    // Not once something asked for later has started: a scene switch empties the scene, and the
+    // later choice wins.
+    if (target === id && !closed && !panel.open && inWell === id && !running) openPanel(id);
   };
 
   let lastTick = performance.now() + 400; // no tick on top of the power-on sound
@@ -390,7 +393,8 @@ export async function boot(o: BootOptions): Promise<void> {
   observer.observe(o.canvas);
   try {
     sound.play(POWER_ON);
-    await show(read("nk.scene") ?? SCENES[0].id).catch(() => show(SCENES[0].id));
+    // Through run(), so a choice made before the scene has loaded waits for it.
+    await run(() => show(read("nk.scene") ?? SCENES[0].id).catch(() => show(SCENES[0].id)));
     live.textContent = `3D mode on: ${projects.length} projects.`;
   } catch {
     fail(BROKEN);

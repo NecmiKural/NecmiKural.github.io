@@ -100,6 +100,41 @@ test("at 320 px, nothing in 3D mode runs off the side, with every scene's button
   await expect(page.locator("#deck .scenes button")).toHaveCount(SCENES.length);
 });
 
+test("a project chosen while 3D mode loads opens once the scene is in; a switch after a choice wins", async ({ page }) => {
+  const title = page.locator("#panel-title");
+
+  await test.step("chosen before the scene has loaded", async () => {
+    // The scene's chunk waits at the gate, so the choice is made before the scene exists.
+    let open = () => {};
+    const gate = new Promise<void>((r) => (open = r));
+    await page.route(/\/replay-deck-[^/]*\.js$/, async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.goto("/");
+    await page.locator("#power").click();
+    await expect(rail(page, ids[0])).toBeFocused();
+    await page.keyboard.press("Enter");
+    open();
+    await expect(title).toBeFocused();
+    await expect(title).toHaveAccessibleName(data.projects[0].title);
+    await expect(held(page)).toHaveAttribute("data-held", ids[0]);
+    await page.keyboard.press("Escape");
+    await expect(held(page)).toHaveAttribute("data-held", "");
+  });
+
+  await test.step("chosen, then a scene switch in the same moment", async () => {
+    await page.evaluate((id) => {
+      document.querySelector<HTMLElement>(`#deck .rail button[data-id="${id}"]`)?.click();
+      document.querySelector<HTMLElement>(`#deck .scenes button[data-scene="switchboard"]`)?.click();
+    }, ids[1]);
+    await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "true");
+    // No panel over the new scene: the project went with the scene it was loading into.
+    await expect(page.locator("#panel")).toBeHidden();
+    await expect(held(page)).toHaveAttribute("data-held", "");
+  });
+});
+
 test("without WebGL 2 the page says so, loads no 3D code and keeps focus", async ({ page }) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext as (...args: unknown[]) => unknown;
@@ -147,6 +182,26 @@ for (const scene of SCENES) {
       await expect(page.locator("#deck")).toHaveCount(0);
       await expect(page.locator("#power")).toBeFocused();
       expect(errors).toEqual([]);
+    });
+
+    test("a project chosen while switching to this scene opens in it once it has loaded", async ({ page }) => {
+      const other = SCENES.find((s) => s !== scene) as string;
+      await page.addInitScript((s) => localStorage.setItem("nk.scene", s), other); // runs after beforeEach's
+      await powerOn(page, other);
+      const p = data.projects[1];
+      // In one task, as a quick visitor would: switch, then choose while the scene still loads.
+      await page.evaluate(
+        ([s, id]) => {
+          document.querySelector<HTMLElement>(`#deck .scenes button[data-scene="${s}"]`)?.click();
+          document.querySelector<HTMLElement>(`#deck .rail button[data-id="${id}"]`)?.click();
+        },
+        [scene, p.id],
+      );
+      const title = page.locator("#panel-title");
+      await expect(title).toBeFocused();
+      await expect(title).toHaveAccessibleName(p.title);
+      await expect(page.locator(`#deck .scenes button[data-scene="${scene}"]`)).toHaveAttribute("aria-pressed", "true");
+      await expect(held(page)).toHaveAttribute("data-held", p.id);
     });
 
     test("quick presses settle on the last project chosen, with nothing left running", async ({ page }) => {
