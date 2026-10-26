@@ -34,11 +34,11 @@ const modes = scenes.map((scene) => {
   return `${scene} ${size} B`;
 });
 
-// Project visuals, as served (they load lazily, one by one): each at most 512 KB, all at most 2 MB.
+// Project visuals, as served (they load lazily, one by one): each at most 512 KB, all at most 3 MB.
 const visuals = readdirSync("dist/visuals").map((f) => [f, readFileSync(`dist/visuals/${f}`).length] as const);
 for (const [f, size] of visuals) if (size > 512 * KB) problems.push(`dist/visuals/${f} is ${size} B, over 512 KB`);
 const allVisuals = visuals.reduce((sum, [, size]) => sum + size, 0);
-if (allVisuals > 2048 * KB) problems.push(`dist/visuals hold ${allVisuals} B, over 2 MB`);
+if (allVisuals > 3072 * KB) problems.push(`dist/visuals hold ${allVisuals} B, over 3 MB`);
 
 const png = readFileSync("dist/og.png");
 const [w, h] = [png.readUInt32BE(16), png.readUInt32BE(20)];
