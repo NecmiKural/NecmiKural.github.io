@@ -2,7 +2,7 @@
 //   node --test tests/loop.test.ts   (part of npm run check)
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 
 let clock = 0;
 let frames: ((now: number) => void)[] = [];
@@ -86,4 +86,62 @@ test("under reduced motion a tween ends at once", async () => {
   let last = -1;
   await loop.tween(1000, (t) => (last = t));
   assert.equal(last, 1);
+});
+
+// Advances the fake clock in 16 ms frames for ms, firing the loop's timers (mocked) and frames.
+async function advance(ms: number): Promise<void> {
+  for (let left = ms; left > 0; left -= 16) {
+    clock += 16;
+    mock.timers.tick(16);
+    const due = frames;
+    frames = [];
+    for (const f of due) f(clock);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+test("an ambient animation ticks about fps times a second, only while allowed, until removed", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const loop = createLoop(() => {}, false, () => assert.fail("loop error"));
+    let ticks = 0;
+    loop.setAmbient(12, () => ticks++);
+    await advance(1000);
+    assert.equal(ticks, 0, "not before the engine allows it");
+    loop.allowAmbient(true);
+    await advance(2000);
+    assert.ok(ticks >= 20 && ticks <= 26, `${ticks} ticks in 2 s at 12 a second`);
+    loop.allowAmbient(false); // a hidden tab, or low power
+    let before = ticks;
+    await advance(1000);
+    assert.equal(ticks, before, "none while not allowed");
+    loop.allowAmbient(true);
+    await advance(1000);
+    assert.ok(ticks > before + 8, "again once allowed");
+    loop.setAmbient(1, null); // a new scene came in
+    before = ticks;
+    await advance(1000);
+    assert.equal(ticks, before, "none once removed");
+    loop.setAmbient(12, () => ticks++);
+    loop.stop();
+    before = ticks;
+    await advance(1000);
+    assert.equal(ticks, before, "none after stop");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("under reduced motion an ambient animation never ticks", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const loop = createLoop(() => {}, true, () => assert.fail("loop error"));
+    let ticks = 0;
+    loop.setAmbient(12, () => ticks++);
+    loop.allowAmbient(true);
+    await advance(2000);
+    assert.equal(ticks, 0);
+  } finally {
+    mock.timers.reset();
+  }
 });

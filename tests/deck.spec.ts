@@ -84,6 +84,11 @@ test("Lab is the default; the switcher loads each scene's chunk on demand and ke
   await expect(bar(page, "Lab")).toHaveAttribute("aria-pressed", "false");
   expect(chunks.filter((c) => c.includes("/switchboard-"))).toHaveLength(1);
   await expect.poll(() => frames(page)).toBeGreaterThan(before);
+  // The Lab's ambient animation went with it: the Switchboard draws nothing while idle.
+  await page.waitForTimeout(600);
+  const idle = await frames(page);
+  await page.waitForTimeout(1000);
+  expect(await frames(page)).toBe(idle);
   // The new scene works: a project opens and closes in it.
   await rail(page, ids[0]).focus();
   await openAndClose(page);
@@ -254,6 +259,41 @@ test.describe("lab", () => {
     await bar(page, "Low power").click();
     await expect(bar(page, "Low power")).toHaveAttribute("aria-pressed", "true");
     await still("with low power");
+    await bar(page, "Low power").click();
+    const resting = await frames(page);
+    await expect.poll(() => frames(page), { message: "moving again with low power off" }).toBeGreaterThan(resting + 2);
+  });
+
+  test("a lab of 21 projects keeps every flask on its shelf and within reach of the pointer", async ({ page }) => {
+    await page.goto("/");
+    // Two more projects in every group: copies of each section's first article, with new ids.
+    const all = await page.evaluate(() => {
+      for (const section of document.querySelectorAll("main section[aria-labelledby]")) {
+        const first = section.querySelector("article[id]") as HTMLElement;
+        for (const n of [1, 2]) {
+          const copy = first.cloneNode(true) as HTMLElement;
+          copy.id = `${first.id}-copy-${n}`;
+          section.append(copy);
+        }
+      }
+      return [...document.querySelectorAll("main article[id]")].map((a) => a.id);
+    });
+    expect(all).toHaveLength(data.projects.length + 8);
+    await page.locator("#power").click();
+    await expect(page.locator("#deck [role=status]")).toHaveText(/3D mode on/);
+    const reached = await page.evaluate(() => {
+      const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+      const r = c.getBoundingClientRect();
+      const ids = new Set<string>();
+      for (let gy = 1; gy < 80; gy++) {
+        for (let gx = 1; gx < 120; gx++) {
+          c.dispatchEvent(new PointerEvent("pointermove", { clientX: r.left + (r.width * gx) / 120, clientY: r.top + (r.height * gy) / 80, bubbles: true }));
+          if (c.dataset.pointed) ids.add(c.dataset.pointed);
+        }
+      }
+      return [...ids];
+    });
+    expect(all.filter((id) => !reached.includes(id)), "projects the pointer never reached").toEqual([]);
   });
 
   test.describe("with reduced motion", () => {
@@ -382,8 +422,13 @@ for (const scene of SCENES) {
       await page.waitForTimeout(1500); // anything still queued would have run by now
       expect(await page.evaluate(() => (window as unknown as { behind: string[] }).behind)).toEqual([]);
       await expect(page.locator("#panel")).toBeVisible();
-      if (AMBIENT.has(scene)) return; // its room moves on its own (tested in the lab block)
       const settled = await frames(page);
+      if (AMBIENT.has(scene)) {
+        // Its room moves on its own, slowly: nothing faster than that is left running.
+        await page.waitForTimeout(2000);
+        expect((await frames(page)) - settled).toBeLessThanOrEqual(32);
+        return;
+      }
       await page.waitForTimeout(500);
       expect(await frames(page)).toBe(settled);
     });

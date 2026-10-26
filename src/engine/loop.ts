@@ -24,15 +24,15 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
   let ambientMs = 0;
   let allowed = false;
   let due = false;
-  let timer = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const wake = () => {
-    timer = 0;
+    timer = undefined;
     due = true;
     invalidate();
   };
   const rest = () => {
     clearTimeout(timer);
-    timer = 0;
+    timer = undefined;
     due = false;
   };
 
@@ -57,7 +57,7 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
       return;
     }
     if (tasks.size) raf = requestAnimationFrame(frame);
-    if (ambient && allowed && !timer && !stopped) timer = window.setTimeout(wake, ambientMs);
+    if (ambient && allowed && !timer && !stopped) timer = setTimeout(wake, ambientMs);
   };
 
   const invalidate = () => {

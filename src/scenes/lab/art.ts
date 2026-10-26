@@ -126,11 +126,15 @@ export function plan(w: number, h: number) {
     round: { x: x0 + 143, y: floor - 56, r: 8 }, // the boiling flask
     condenser: { x0: x0 + 152, y0: floor - 74, x1: x0 + 194, y1: floor - 56 },
     receiver: { x: x0 + 191, y: floor - 30 },
-    crt: { x: x0 + 222, y: floor - 66, w: 50, h: 36 },
+    crt: { x: x0 + 222, y: floor - 66, w: 54, h: 36 },
     scope: { x: x0 + 240, y: floor - 110, w: 52, h: 28 },
   };
 }
 export type Plan = ReturnType<typeof plan>;
+
+// The space between flasks on a shelf of n: 16 pixels, closer when more must fit on its 86, so
+// the last one still stands on it (the first at +10, the last ending by +90).
+export const shelfPitch = (n: number) => (n <= 1 ? 16 : Math.min(16, Math.floor(69 / (n - 1))));
 
 // The liquid's way through the glass, as points: from the sample flask's neck to the boiling
 // flask, then as vapour up and through the condenser to its outlet over the receiver.
@@ -228,7 +232,7 @@ export function paintRoom(g: G, p: Plan, counts: number[]): void {
     rect(g, x0 + 6, y + 3, 86, 1, PAL.woodDark);
     rect(g, x0 + 10, y + 4, 2, 4, PAL.steelDark);
     rect(g, x0 + 86, y + 4, 2, 4, PAL.steelDark);
-    const from = x0 + 10 + n * 16;
+    const from = n ? x0 + 10 + (n - 1) * shelfPitch(n) + FLASK_W + 5 : x0 + 10;
     if (from < x0 + 84) books(g, from, y, x0 + 90 - from, 11, row);
   });
   // The oscilloscope on its bracket.
@@ -239,8 +243,6 @@ export function paintRoom(g: G, p: Plan, counts: number[]): void {
   rect(g, s.x + 3, s.y + 3, 32, 22, PAL.ink);
   for (const [k, y] of [0, 1, 2].entries()) disc(g, s.x + 43, s.y + 6 + y * 7, 2, k === 0 ? PAL.red : PAL.steel);
   rect(g, s.x + 39, s.y + 23, 9, 2, PAL.greenDim);
-  // Barrels and a crate under the shelves.
-
   // The bench, its drawers, and what stands on it.
   const b = p.bench;
   rect(g, b.x, b.y, b.w, 3, PAL.woodLight);
@@ -253,10 +255,11 @@ export function paintRoom(g: G, p: Plan, counts: number[]): void {
   rig(g, p);
   crtHousing(g, p);
   lampBody(g, p);
-  keyboard(g, p.crt.x + 6, b.y);
-  mug(g, x0 + 275, b.y);
-  rack(g, x0 + 285, b.y);
-  barrel(g, x0 + 299, floor, "#3d6b4f");
+  keyboard(g, p.crt.x + 8, b.y);
+  mug(g, x0 + 278, b.y);
+  rack(g, x0 + 288, b.y);
+  barrel(g, x0 + 303, floor, "#3d6b4f");
+  barrel(g, x0 + 74, floor, "#7a3b2e"); // behind the books
   // In front, under the shelves: a stack of books on the topics of the work.
   bookStack(g, x0 + 4, floor, [
     ["MACHINE LEARNING", "#2f3d8c"],
@@ -368,6 +371,10 @@ function beaker(g: G, x: number, y: number): void {
 // The window: four panes of night sky, a full moon and an invented skyline (the stars and lit
 // windows that change are drawn per frame, by windowLights).
 function windowView(g: G, x: number, y: number, w: number, h: number): void {
+  g.save();
+  g.beginPath();
+  g.rect(x, y, w, h);
+  g.clip(); // the sky and the city stay inside the frame
   for (let k = 0; k < h; k++) rect(g, x, y + k, w, 1, PAL.sky[Math.min(2, Math.floor((k / h) * 3))]);
   disc(g, x + w - 16, y + 11, 5, PAL.moon);
   px(g, x + w - 18, y + 9, "#d8cfa8");
@@ -379,6 +386,7 @@ function windowView(g: G, x: number, y: number, w: number, h: number): void {
     rect(g, bx, y + h - bh, bw, bh, PAL.city);
     bx += bw + (hash(k, 41) > 0.7 ? 1 : 0);
   }
+  g.restore();
   rect(g, x - 2, y - 2, w + 4, 2, PAL.woodDark); // the frame and its cross bars
   rect(g, x - 2, y + h, w + 4, 3, PAL.woodLight);
   rect(g, x - 2, y, 2, h, PAL.woodDark);
@@ -475,8 +483,8 @@ function locker(g: G, x: number, floor: number): void {
   rect(g, x, floor - 70, 32, 70, PAL.steelDark);
   rect(g, x + 1, floor - 69, 15, 68, "#3d4552");
   rect(g, x + 17, floor - 69, 14, 68, "#3d4552");
-  for (let k = 0; k < 3; k++) rect(g, x + 4, floor - 64 + k * 3, 9, 1, PAL.ink);
-  for (let k = 0; k < 3; k++) rect(g, x + 20, floor - 64 + k * 3, 9, 1, PAL.ink);
+  for (let k = 0; k < 3; k++) rect(g, x + 4, floor - 64 + k * 3, 9, 1, PAL.ink); // vents on one door
+  rect(g, x + 19, floor - 40, 2, 6, PAL.steel); // a handle on the other
 }
 
 function cylinder(g: G, x: number, floor: number): void {
@@ -531,7 +539,7 @@ function crtHousing(g: G, p: Plan): void {
   rect(g, c.x, c.y, c.w, c.h, PAL.housing);
   rect(g, c.x, c.y + c.h - 2, c.w, 2, PAL.housingDark);
   rect(g, c.x + 1, c.y + 1, c.w - 2, 1, "#e2d6b4");
-  rect(g, c.x + 5, c.y + 4, 40, 28, PAL.ink); // the screen's bezel
+  rect(g, c.x + 5, c.y + 4, 44, 28, PAL.ink); // the screen's bezel
   rect(g, c.x + c.w - 4, c.y + c.h - 6, 2, 2, PAL.greenDim); // power light, off to one side
 }
 
@@ -693,19 +701,19 @@ export function scopeTrace(g: G, p: Plan, t: number): void {
 export function crtScreen(g: G, p: Plan, t: number, text: string[] | null): void {
   const sx = p.crt.x + 7;
   const sy = p.crt.y + 6;
-  rect(g, sx, sy, 36, 24, PAL.screen);
+  rect(g, sx, sy, 42, 24, PAL.screen); // 7 characters by 3 lines
   if (text) {
-    text.slice(0, 3).forEach((s, i) => drawText(g, s.slice(0, 6), sx, sy + i * 8, 1, i === 0 ? PAL.amber : PAL.green));
+    text.slice(0, 3).forEach((s, i) => drawText(g, s.slice(0, 7), sx, sy + i * 8, 1, i === 0 ? PAL.amber : PAL.green));
     return;
   }
   // A scrolling trace on top, bars of a graph below.
   let last = 0;
-  for (let k = 0; k < 36; k++) {
+  for (let k = 0; k < 42; k++) {
     const v = Math.round(6 + Math.sin(k / 2.3 - t / 300) * 4 + Math.sin(k / 0.9 + t / 170));
     if (k) line(g, sx + k - 1, sy + last, sx + k, sy + v, PAL.green);
     last = v;
   }
-  for (let k = 0; k < 6; k++) {
+  for (let k = 0; k < 7; k++) {
     const hgt = 3 + Math.round((Math.sin(t / 500 + k * 1.7) * 0.5 + 0.5) * 7);
     rect(g, sx + 2 + k * 6, sy + 23 - hgt, 4, hgt, k % 2 ? PAL.greenDim : PAL.green);
   }
@@ -729,7 +737,9 @@ export function windowLights(g: G, p: Plan, t: number): void {
     for (let j = 0; j < 4; j++) {
       const wx = bx + 1 + Math.floor(hash(k, j + 60) * (bw - 2));
       const wy = y + 50 - bh + 2 + Math.floor(hash(k, j + 70) * (bh - 4));
-      if (hash(k * 7 + j, beat) > 0.45) px(g, wx, wy, j % 2 ? "#ffd27a" : "#7ee0ff");
+      // Inside the frame, and not where the rig stands in front of the window.
+      const free = wx < Math.min(x + 66, p.condenser.x0 - 2);
+      if (free && hash(k * 7 + j, beat) > 0.45) px(g, wx, wy, j % 2 ? "#ffd27a" : "#7ee0ff");
     }
     bx += bw + (hash(k, 41) > 0.7 ? 1 : 0);
   }
@@ -793,11 +803,11 @@ const CAT = [
   "..####################..",
 ];
 export function cat(g: G, p: Plan, t: number): void {
-  const x = p.crt.x + 9;
+  const x = p.crt.x + 13;
   const y = p.crt.y - CAT.length;
   const beat = Math.floor(t / 250);
-  const twitch = hash(beat, 81) > 0.97; // an ear, for a quarter second now and then
-  const flick = hash(Math.floor(t / 400), 83) > 0.9 ? 1 : 0;
+  const twitch = t > 0 && hash(beat, 81) > 0.97; // an ear, for a quarter second now and then
+  const flick = t > 0 && hash(Math.floor(t / 400), 83) > 0.9 ? 1 : 0; // still: the resting pose
   const at = (r: number, c: number) => CAT[r]?.[c] === "#";
   CAT.forEach((row, r) => {
     for (let c = 0; c < row.length; c++) {

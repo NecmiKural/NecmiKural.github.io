@@ -84,7 +84,7 @@ export const create: CreateScene = (stage) => {
   let focused: string | null = null;
   let playing: string | null = null;
   let status = "";
-  let at: Point | null = null; // the playing flask's position while it moves or stands on the rig
+  let flight = 0; // the playing flask's way from its shelf (0) to the rig (1)
   let flow = 0; // 0..1 along the tubing
   let drops = 0; // 0..3 drops fallen, fractional while one falls
   let screen: string[] | null = null;
@@ -101,6 +101,20 @@ export const create: CreateScene = (stage) => {
   const home = (id: string) => homes.get(id) ?? { x: 0, y: 0 };
   const sampleAt = (): Point => ({ x: plan.sample.x, y: plan.sample.y - art.FLASK_H });
   const placePick = (id: string, p: Point) => picks.get(id)?.position.set(p.x + art.FLASK_W / 2, -(p.y + art.FLASK_H / 2), 1);
+  // Where a flask is: on its shelf, or along an arc over the bench to the rig. Worked out from the
+  // current layout every time, so a resize mid-flight lands it in the right place.
+  const flaskAt = (id: string): Point => {
+    const from = home(id);
+    if (id !== playing || flight === 0) return from;
+    const to = sampleAt();
+    const lift = Math.min(from.y, to.y) - 20;
+    const k = flight;
+    const u = 1 - k;
+    return {
+      x: Math.round(u * u * from.x + 2 * u * k * ((from.x + to.x) / 2) + k * k * to.x),
+      y: Math.round(u * u * from.y + 2 * u * k * lift + k * k * to.y),
+    };
+  };
 
   const draw = () => {
     if (!texture) return;
@@ -152,7 +166,11 @@ export const create: CreateScene = (stage) => {
     );
     art.screenGlow(g, plan);
     art.cat(g, plan, t);
-    if (playing && at) art.flask(g, at.x, at.y, sample, t, 99);
+    if (playing) {
+      const p = flaskAt(playing);
+      art.flask(g, p.x, p.y, sample, t, 99);
+      placePick(playing, p);
+    }
     art.lampLight(g, plan);
     const p = shown ? byId.get(shown) : undefined;
     const version = p?.tag ? p.tag.toUpperCase() : p?.ref ? `REF ${p.ref.toUpperCase()}` : "";
@@ -220,12 +238,15 @@ export const create: CreateScene = (stage) => {
       const groups = [...new Set(order.map((id) => byId.get(id)?.group ?? ""))];
       groups.forEach((group, gi) => {
         const row = groups.length - 1 - gi;
-        order
-          .filter((id) => byId.get(id)?.group === group)
-          .forEach((id, col) => homes.set(id, { x: plan.x0 + 10 + col * 16, y: plan.shelf(row) - art.FLASK_H }));
+        const on = order.filter((id) => byId.get(id)?.group === group);
+        const pitch = art.shelfPitch(on.length);
+        on.forEach((id, col) => {
+          homes.set(id, { x: plan.x0 + 10 + col * pitch, y: plan.shelf(row) - art.FLASK_H });
+          // Pick planes as wide as the flask's share of the shelf, so neighbours never overlap.
+          picks.get(id)?.scale.set(Math.min(art.FLASK_W + 4, pitch) / (art.FLASK_W + 4), 1, 1);
+        });
       });
-      if (playing && at) at = sampleAt();
-      for (const id of order) placePick(id, id === playing && at ? at : home(id));
+      for (const id of order) placePick(id, flaskAt(id));
       camera.right = grid.width;
       camera.bottom = -grid.height;
       camera.updateProjectionMatrix();
@@ -247,22 +268,7 @@ export const create: CreateScene = (stage) => {
       playing = id;
       status = RUNNING;
       stage.play(LIFT);
-      // To the rig, in an arc over the bench.
-      const from = home(id);
-      const to = sampleAt();
-      const lift = Math.min(from.y, to.y) - 20;
-      await stage.tween(
-        450,
-        (k) => {
-          const u = 1 - k;
-          at = {
-            x: Math.round(u * u * from.x + 2 * u * k * ((from.x + to.x) / 2) + k * k * to.x),
-            y: Math.round(u * u * from.y + 2 * u * k * lift + k * k * to.y),
-          };
-          placePick(id, at);
-        },
-        easeInOut,
-      );
+      await stage.tween(450, (k) => (flight = k), easeInOut); // to the rig, in an arc over the bench
       // Through the tubing, the boiling flask and the condenser.
       stage.play(POUR);
       await stage.tween(500, (k) => (flow = k), linear);
@@ -274,7 +280,7 @@ export const create: CreateScene = (stage) => {
       }
       // The CRT prints the assay.
       stage.play(ENDPOINT);
-      screen = ["ASSAY", (p.tag ?? p.ref ?? "").toUpperCase().slice(0, 6), "DONE"];
+      screen = ["ASSAY", (p.tag ?? p.ref ?? "").toUpperCase().slice(0, 7), "DONE"]; // 7 a line
       const chars = screen.join("").length;
       await stage.tween(300, (k) => (typed = Math.ceil(chars * k)), linear);
       status = DONE;
@@ -286,26 +292,23 @@ export const create: CreateScene = (stage) => {
       if (!id) return;
       stage.play(PUT_BACK);
       status = "";
-      const from = at ?? sampleAt();
-      const to = home(id);
       const full = flow;
       await stage.tween(
         400,
         (k) => {
-          at = { x: Math.round(from.x + (to.x - from.x) * k), y: Math.round(from.y + (to.y - from.y) * k - Math.sin(k * Math.PI) * 14) };
-          placePick(id, at);
+          flight = 1 - k; // back along the same arc
           flow = full * (1 - k);
           drops = 3 * (1 - k);
         },
         easeInOut,
       );
       playing = null;
-      at = null;
+      flight = 0;
       flow = 0;
       drops = 0;
       screen = null;
       typed = 0;
-      placePick(id, to);
+      placePick(id, home(id));
       stage.invalidate();
     },
 
