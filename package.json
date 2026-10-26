@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173 --strictPort",
-    "check": "tsc && tsc -p src && node scripts/check-copy.ts --self-test && node scripts/check-copy.ts",
+    "check": "tsc && tsc -p src && node --test tests/loop.test.ts && node scripts/check-copy.ts --self-test && node scripts/check-copy.ts",
     "size": "node scripts/check-size.ts",
     "test": "playwright test",
     "lhci": "lhci autorun",

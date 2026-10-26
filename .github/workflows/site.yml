@@ -14,7 +14,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,14 +32,40 @@ jobs:
         env:
           PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
       - run: npm run size
-      # The Ubuntu package mirror sometimes slows to a crawl and the install never finishes; each
-      # attempt gets 5 minutes, and a retry opens fresh connections.
+      # The browsers' system packages are about 120 MB from the Ubuntu mirror, which now and then
+      # crawls at 100 KB/s. apt is not killed and retried, which left it holding
+      # the dpkg lock; instead its .deb files are cached, so a run downloads only what changed.
+      - name: Cache key for the browsers' system packages
+        id: debs-key
+        run: |
+          echo "prefix=debs-$ImageOS-" >> "$GITHUB_OUTPUT"
+          echo "key=debs-$ImageOS-$ImageVersion-playwright-$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: debs
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.debs-key.outputs.key }}
+          restore-keys: ${{ steps.debs-key.outputs.prefix }}
+      - name: Install browser system packages
+        timeout-minutes: 25
+        run: |
+          mkdir -p ~/apt-debs/partial
+          echo "Dir::Cache::Archives \"$HOME/apt-debs\";" | sudo tee /etc/apt/apt.conf.d/zzz-site-debs
+          npx playwright install-deps chromium firefox webkit
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-debs # apt leaves them root-owned; the cache saves as this user
+      - if: steps.debs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.debs-key.outputs.key }}
+      # The browsers come from Playwright's own servers and touch no system package, so a stalled
+      # download can be killed and tried again.
       - name: Install browsers
+        timeout-minutes: 10
         run: |
           for attempt in 1 2 3; do
-            timeout 300 npx playwright install --with-deps chromium firefox webkit && exit 0
-            echo "browser install attempt $attempt did not finish; retrying"
-            sudo dpkg --configure -a # finish any package an interrupted attempt left half set up
+            timeout 180 npx playwright install chromium firefox webkit && exit 0
+            echo "browser download attempt $attempt did not finish; retrying"
           done
           exit 1
       - run: npm test
