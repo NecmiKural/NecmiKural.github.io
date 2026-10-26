@@ -172,7 +172,8 @@ function article(p: Project, sizes: Sizes): string {
       ` alt="${esc(need(pic.alt, `${where}.visuals.alt`))}" width="${v.width}" height="${v.height}" loading="lazy" decoding="async">`;
     const play = v.still ? `<button class="play" type="button" hidden>Play the demo<span class="vh"> of ${esc(p.title)}</span></button>` : "";
     const caption = pic.caption ? `<figcaption>${esc(pic.caption)}</figcaption>` : "";
-    return `<figure class="figure">${img}${play}${caption}</figure>`;
+    // A portrait image (a phone screenshot) gets a narrow column, so two sit side by side (index.html).
+    return `<figure class="figure${v.height > v.width ? " tall" : ""}">${img}${play}${caption}</figure>`;
   });
   const row = linkRow(p);
   return [
@@ -181,7 +182,7 @@ function article(p: Project, sizes: Sizes): string {
     `<p class="byline">${esc([byline, p.stack.join(", ")].filter(Boolean).join(SEP))}</p>`,
     `<p>${esc(need(p.card, `${where}.card`))}</p>`,
     claims.length ? `<ul class="claims">\n${claims.join("\n")}\n</ul>` : "",
-    ...visuals,
+    visuals.length ? `<div class="figures">${visuals.join("")}</div>` : "",
     row.length ? `<p class="more">${row.join(SEP)}</p>` : "",
     "</article>",
   ]

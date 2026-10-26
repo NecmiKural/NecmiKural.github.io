@@ -8,7 +8,7 @@ Source of https://necmikural.github.io: one static HTML page that works with Jav
 
 Do not edit the copies. Change the TOML in that repo, run its build, push, then run `npm run sync-content` here and commit. CI compares the copies byte for byte with that repo's `main` on every push and every Monday, and fails if they differ.
 
-Project visuals (the flagship demos, crossfade's demo GIF, figures from the coursework repos; a project may have several) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF is served as a still of its first frame, cut at build time; with JavaScript it plays on its own, unless the visitor asks for less motion, and a button stops it and plays it again. Without JavaScript the still stays. On the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens; neither moves with reduced motion or in print.
+Project visuals (the flagship demos, app screenshots, crossfade's demo GIF, charts and figures from the other repos; a project may have several, and portrait screenshots sit side by side) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF is served as a still of its first frame, cut at build time; with JavaScript it plays on its own, unless the visitor asks for less motion, and a button stops it and plays it again. Without JavaScript the still stays. On the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens; neither moves with reduced motion or in print.
 
 ## Commands
 
@@ -19,7 +19,7 @@ npm ci
 npm run dev            # local server
 npm run build          # dist/, fetches the visuals
 npm run check          # types and the copy check over the repo and dist/
-npm run size           # budgets: index.html under 14 KB gzip, entry JS under 2 KB, 3D mode under 200 KB per scene, each visual under 512 KB and all under 2 MB, og.png 1200x630
+npm run size           # budgets: index.html under 14 KB gzip, entry JS under 2 KB, 3D mode under 200 KB per scene, each visual under 512 KB and all under 3 MB, og.png 1200x630
 npm test               # Playwright: the page in Chromium, Firefox and WebKit; 3D mode in Chromium
 npx lhci autorun       # Lighthouse, mobile
 npm run og             # redraw public/og.png after the name, headline or flagships change

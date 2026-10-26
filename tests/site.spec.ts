@@ -148,6 +148,16 @@ test.describe("project visuals", () => {
     }
   });
 
+  test("portrait screenshots sit side by side on a wide screen, and each still fills its own column", async ({ page }) => {
+    const tall = data.projects.find((p) => p.visuals.filter((v) => /screenshots\//.test(v.url)).length >= 2);
+    test.skip(!tall, "no project with two portrait screenshots");
+    await page.goto("/");
+    const [a, b] = await page.locator(`#${tall?.id} figure.tall`).evaluateAll((fs) => fs.slice(0, 2).map((f) => f.getBoundingClientRect().toJSON()));
+    expect(b.top).toBe(a.top);
+    expect(b.left).toBeGreaterThan(a.right);
+    expect(a.width).toBeGreaterThan(200);
+  });
+
   test("they rise into place as they scroll into view, where the browser can tie that to scrolling", async ({ page }) => {
     await page.goto("/");
     test.skip(!(await page.evaluate(() => CSS.supports("animation-timeline: view()"))), "no scroll-driven animations here");
