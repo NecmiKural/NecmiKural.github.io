@@ -224,6 +224,9 @@ test.describe("lab", () => {
     await page.clock.install();
     await powerOn(page, "lab");
     await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+    // pauseAt fires each due callback once, at the new time: let frames and the timers queued after
+    // them run, as they would in a browser, before the assay starts.
+    await page.clock.runFor(100);
     const [a, b] = data.projects; // both flagships, on the top shelf
     await expect(rail(page, a.id)).toBeFocused();
     await page.keyboard.press("Enter");
