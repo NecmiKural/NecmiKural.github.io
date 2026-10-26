@@ -161,14 +161,19 @@ Kept away from: any railway's livery or logos, a locomotive with a face, and the
 
 **Idea.** A chemistry lab, for a chemistry background. Each project is a sample flask on the shelves, one shelf per group. Choosing one takes it to the distillation rig on the bench: its liquid runs through the glass tubing into the boiling flask over a Bunsen burner, through the condenser coil, and drips into the receiver; then the CRT prints the assay and the panel opens. A distillation ends in a measured product, the way the projects' numbers come from runs that can be replayed.
 
-**Version 2 (26 October 2026).** The first Lab was a few 3D boxes and read as plain and empty. Version 2 is a dense, lived-in lab at night, drawn as an 80s pixel-art game.
+**Version 2 (26 October 2026).** The first Lab was a few 3D boxes and read as plain and empty. Version 2 is a dense, lived-in lab at night, drawn as an 80s pixel-art game. Necmi's reference images set the mood only (nothing traced or copied): a cosy workspace at night, deep purple-blue light against a warm orange desk lamp.
 
 **Look.** A 2D canvas drawn in code (`src/scenes/lab/art.ts`) at at least 320 x 200 pixels in the canvas's shape, shown 1:1 on a plane facing an orthographic camera and scaled up by the browser without smoothing; invisible planes over the flasks carry the project ids for pointer picking. In the room:
 
-- a brick wall at night, with magenta and teal neon tubes whose light spills down it;
+- a brick wall in purple-blue night light, with magenta and teal neon tubes whose light spills down it;
+- a window onto an invented night skyline, a full moon, stars that twinkle and windows across the city that light up;
+- a warm desk lamp pouring orange light over the rig and the CRT, and the CRT's green light on the wall behind it;
+- a hanging plant, a red LED clock showing the visitor's own time, a mug with steam, a keyboard;
+- a stack of books whose spines carry the topics of the work: MACHINE LEARNING, DATA STREAMS, CHEMISTRY;
+- a small black cat asleep on the CRT: now and then its tail flicks or an ear twitches; it never moves otherwise, is not interactive and is still with reduced motion (an ambient detail, agreed with Necmi, not a character);
 - pipes along the top and down one side, with joints and a valve, and cables hanging between them;
 - a generic periodic-table poster (coloured cells by block, no text), a DANGER sign and the biohazard symbol;
-- shelves of project flasks with books and spare glassware beside them, barrels and a crate below;
+- shelves of glowing project flasks with books and spare glassware beside them, and a barrel;
 - an oscilloscope with a moving trace, a CRT with a scrolling waveform and bars (or the assay), a test-tube rack;
 - the rig: boiling flask on a ring over a flickering burner, a slanting condenser with a coil inside, tubing and the receiver;
 - steam rising, bubbles in the flasks, now and then sparks from a cable joint;
@@ -186,14 +191,16 @@ It matches the profile README's banner: the flagship samples take the banner's a
 | Banner accent: flagship samples in the light and dark scheme | #C2410C, #FB923C |
 | Banner accent, lighter: lettering, HUD brackets, selection | #FB923C |
 | Neon tubes | #FF3FD0 magenta, #2FF5E0 teal |
+| Desk lamp, LED clock | #FFB35C, #FF3B3B |
+| Boiling flask between assays | #9D4DFF |
 | Other samples: software, coursework, open source | #4AA8FF, #57E389, #C08CFF |
 | CRT green, dim green, amber | #39FF6A, #145C2A, #FFB000 |
-| Wall, mortar | #151A2C, #0F1220 |
+| Wall, mortar (night purple-blue) | #1D1838 to #221B42, #0D0A1C |
 | Wood, glass, terminal housing | #6B4A33, #B9E4EF, #C9B98F |
 
-Kept away from: a face and any character. There is no character (decided with Necmi). The biohazard symbol is drawn with thin strokes, because filled blobs read as two eyes over a mouth at this size. The CRT's power light and the oscilloscope's knobs sit off to one side. No game's sprites, fonts or sounds, and no traced references.
+Kept away from: a face and any character. There is no character (decided with Necmi); the cat is an ambient detail with no face drawn, only its silhouette, ears and tail. A recognisable gaming device in one reference is left out. The biohazard symbol is drawn with thin strokes, because filled blobs read as two eyes over a mouth at this size. The CRT's power light and the oscilloscope's knobs sit off to one side. No game's sprites, fonts or sounds, and no traced references.
 
-**Motion.** About 1.6 s: the flask flies to the rig in an arc (450 ms), the liquid runs through the tubing and condenser (500 ms), three drops fall (330 ms), the CRT types the assay (300 ms). Putting it back takes 400 ms. A second Enter skips to the end; with reduced motion every step is a cut. The room's ambient animation runs at 12 frames a second (neon flicker, flame, traces, bubbles, steam, sparks, the selection's pulse), rests in a hidden tab and with low power, and with reduced motion the room is a still picture.
+**Motion.** About 1.6 s: the flask flies to the rig in an arc (450 ms), the liquid runs through the tubing and condenser (500 ms), three drops fall (330 ms), the CRT types the assay (300 ms). Putting it back takes 400 ms. A second Enter skips to the end; with reduced motion every step is a cut. The room's ambient animation runs at 12 frames a second (neon flicker, flame, traces, bubbles, steam, sparks, stars and city lights, the clock's colon, the cat's tail and ear, the selection's pulse), rests in a hidden tab and with low power, and with reduced motion the room is a still picture.
 
 **Sound.** Off by default; at most 4 tones per motif.
 

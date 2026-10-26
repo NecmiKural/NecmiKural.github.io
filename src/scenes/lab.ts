@@ -34,7 +34,7 @@ const LETTERING = ACCENTS.dark;
 const RUNNING = "ASSAY RUNNING";
 const DONE = "ASSAY DONE"; // the run reached its end; no pass or fail is claimed
 const FPS = 12; // the room's ambient animation
-const IDLE_LIQUID = "#2a8f8f"; // what the boiling flask holds between assays
+const IDLE_LIQUID = "#9d4dff"; // what the boiling flask holds between assays
 
 const LIFT: Motif = [{ hz: 330, to: 660, dur: 0.06, vol: 0.08 }];
 const POUR: Motif = [{ noise: 1800, dur: 0.18, vol: 0.04 }];
@@ -106,12 +106,16 @@ export const create: CreateScene = (stage) => {
     if (!texture) return;
     g.drawImage(room, 0, 0);
     art.neon(g, plan, t);
+    art.windowLights(g, plan, t);
+    art.clock(g, plan, new Date(), t);
     const shown = playing ?? focused;
-    // Flasks on the shelves; the one being assayed is drawn where it is.
+    // Flasks on the shelves, glowing; the one being assayed is drawn where it is.
     order.forEach((id, i) => {
       if (id === playing) return;
       const p = home(id);
-      art.flask(g, p.x, p.y, liquidOf(byId.get(id)?.group ?? ""), t, i);
+      const liquid = liquidOf(byId.get(id)?.group ?? "");
+      art.flaskGlow(g, p.x, p.y, liquid);
+      art.flask(g, p.x, p.y, liquid, t, i);
     });
     if (focused && focused !== playing) {
       const p = home(focused);
@@ -132,6 +136,7 @@ export const create: CreateScene = (stage) => {
     if (level) art.rect(g, r.x + 1, r.y - 1 - level, art.FLASK_W - 2, level, sample);
     art.steam(g, plan.round.x, plan.round.y - plan.round.r - 9, t, playing ? 6 : 3, 1);
     art.steam(g, r.x + 5, r.y - art.FLASK_H - 1, t, 2, 2);
+    art.steam(g, plan.x0 + 278, plan.bench.y - 8, t, 2, 3); // the mug
     art.sparks(g, plan.x0 + 150, plan.top + 12, t);
     art.scopeTrace(g, plan, t);
     let left = typed; // characters typed so far, line by line
@@ -145,7 +150,10 @@ export const create: CreateScene = (stage) => {
         return part;
       }) ?? null,
     );
+    art.screenGlow(g, plan);
+    art.cat(g, plan, t);
     if (playing && at) art.flask(g, at.x, at.y, sample, t, 99);
+    art.lampLight(g, plan);
     const p = shown ? byId.get(shown) : undefined;
     const version = p?.tag ? p.tag.toUpperCase() : p?.ref ? `REF ${p.ref.toUpperCase()}` : "";
     const lines = art.hud(g, plan, {

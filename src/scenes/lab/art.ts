@@ -9,16 +9,22 @@ export const TOP_BAR = 16; // HUD bar heights, in pixels
 export const BOTTOM_BAR = 22;
 
 export const PAL = {
-  wall: "#151a2c",
-  brick: ["#1b2137", "#1e253d", "#192036"],
-  mortar: "#0f1220",
+  wall: "#120f26",
+  brick: ["#1d1838", "#221b42", "#1a1533"],
+  mortar: "#0d0a1c",
   pipe: "#4a5568",
   pipeLight: "#7a8699",
   pipeDark: "#2a3142",
   valve: "#c0392b",
   magenta: "#ff3fd0",
   teal: "#2ff5e0",
-  floor: ["#191c29", "#21253a"],
+  floor: ["#18142c", "#211b3b"],
+  lamp: "#ffb35c",
+  sky: ["#0b0f33", "#1a1450", "#2a1a5e"],
+  city: "#0f0b24",
+  moon: "#f4ecc8",
+  cat: "#050409",
+  catRim: "#7a68c8",
   wood: "#6b4a33",
   woodDark: "#3b2a20",
   woodLight: "#8a6446",
@@ -208,9 +214,13 @@ export function paintRoom(g: G, p: Plan, counts: number[]): void {
   sag(g, x0 + 96, top + 5, x0 + 150, top + 12, 9);
   sag(g, x0 + 250, top + 9, x0 + 244, p.scope.y, 4);
   sag(g, p.scope.x + 4, p.scope.y + p.scope.h, p.crt.x + 40, p.crt.y, 10);
-  periodicTable(g, x0 + 104, top + 24);
-  danger(g, x0 + 176, top + 24);
+  windowView(g, x0 + 100, top + 17, 66, 50);
+  periodicTable(g, x0 + 172, top + 17);
+  danger(g, x0 + 174, top + 47);
   biohazard(g, x0 + 228, top + 31);
+  rect(g, x0 + 249, top + 15, 37, 12, PAL.ink); // the clock's case; its digits are drawn per frame
+  rect(g, x0 + 249, top + 15, 37, 1, PAL.steelDark);
+  plant(g, x0 + 94, top + 5);
   // Shelves on the left, one per group; books and spare glassware beside the project flasks.
   counts.forEach((n, row) => {
     const y = p.shelf(row);
@@ -230,11 +240,7 @@ export function paintRoom(g: G, p: Plan, counts: number[]): void {
   for (const [k, y] of [0, 1, 2].entries()) disc(g, s.x + 43, s.y + 6 + y * 7, 2, k === 0 ? PAL.red : PAL.steel);
   rect(g, s.x + 39, s.y + 23, 9, 2, PAL.greenDim);
   // Barrels and a crate under the shelves.
-  barrel(g, x0 + 8, floor, "#3d6b4f");
-  barrel(g, x0 + 33, floor, "#7a3b2e");
-  rect(g, x0 + 60, floor - 16, 24, 16, PAL.woodDark);
-  line(g, x0 + 60, floor - 16, x0 + 83, floor - 1, PAL.wood);
-  line(g, x0 + 60, floor - 1, x0 + 83, floor - 16, PAL.wood);
+
   // The bench, its drawers, and what stands on it.
   const b = p.bench;
   rect(g, b.x, b.y, b.w, 3, PAL.woodLight);
@@ -246,7 +252,17 @@ export function paintRoom(g: G, p: Plan, counts: number[]): void {
   }
   rig(g, p);
   crtHousing(g, p);
-  rack(g, x0 + 278, b.y);
+  lampBody(g, p);
+  keyboard(g, p.crt.x + 6, b.y);
+  mug(g, x0 + 275, b.y);
+  rack(g, x0 + 285, b.y);
+  barrel(g, x0 + 299, floor, "#3d6b4f");
+  // In front, under the shelves: a stack of books on the topics of the work.
+  bookStack(g, x0 + 4, floor, [
+    ["MACHINE LEARNING", "#2f3d8c"],
+    ["DATA STREAMS", "#6a2f6e"],
+    ["CHEMISTRY", "#2f6e5a"],
+  ]);
   // Side areas on a wide grid: lockers and gas cylinders.
   for (let x = x0 - 40; x > -30; x -= 44) locker(g, x, floor);
   for (let x = x0 + 324; x < w; x += 22) cylinder(g, x, floor);
@@ -285,9 +301,9 @@ function sag(g: G, ax: number, ay: number, bx: number, by: number, drop: number)
 
 // A generic periodic table: 18 columns, 7 periods and the two rows below, coloured by block.
 function periodicTable(g: G, x: number, y: number): void {
-  rect(g, x, y, 62, 36, PAL.paper);
-  rect(g, x + 1, y + 1, 60, 34, "#c8c1ad");
-  const cell = (c: number, r: number, colour: string) => rect(g, x + 4 + c * 3, y + 3 + r * 3, 2, 2, colour);
+  rect(g, x, y, 42, 27, PAL.paper);
+  rect(g, x + 1, y + 1, 40, 25, "#b9b19c");
+  const cell = (c: number, r: number, colour: string) => px(g, x + 3 + c * 2, y + 3 + r * 2, colour);
   for (let r = 0; r < 7; r++) {
     for (let c = 0; c < 18; c++) {
       const present = r === 0 ? c === 0 || c === 17 : r < 3 ? c < 2 || c > 11 : true;
@@ -296,7 +312,7 @@ function periodicTable(g: G, x: number, y: number): void {
       cell(c, r, colour);
     }
   }
-  for (let r = 0; r < 2; r++) for (let c = 2; c < 16; c++) cell(c, 7.7 + r, "#2f9a9a");
+  for (let r = 0; r < 2; r++) for (let c = 2; c < 16; c++) cell(c, 8 + r, "#2f9a9a");
 }
 
 function danger(g: G, x: number, y: number): void {
@@ -349,6 +365,81 @@ function beaker(g: G, x: number, y: number): void {
   rect(g, x, y - 1, 7, 1, PAL.glass);
 }
 
+// The window: four panes of night sky, a full moon and an invented skyline (the stars and lit
+// windows that change are drawn per frame, by windowLights).
+function windowView(g: G, x: number, y: number, w: number, h: number): void {
+  for (let k = 0; k < h; k++) rect(g, x, y + k, w, 1, PAL.sky[Math.min(2, Math.floor((k / h) * 3))]);
+  disc(g, x + w - 16, y + 11, 5, PAL.moon);
+  px(g, x + w - 18, y + 9, "#d8cfa8");
+  px(g, x + w - 14, y + 13, "#d8cfa8");
+  px(g, x + w - 15, y + 8, "#d8cfa8");
+  for (let bx = x, k = 0; bx < x + w; k++) {
+    const bw = 5 + Math.floor(hash(k, 31) * 7);
+    const bh = 10 + Math.floor(hash(k, 37) * 20);
+    rect(g, bx, y + h - bh, bw, bh, PAL.city);
+    bx += bw + (hash(k, 41) > 0.7 ? 1 : 0);
+  }
+  rect(g, x - 2, y - 2, w + 4, 2, PAL.woodDark); // the frame and its cross bars
+  rect(g, x - 2, y + h, w + 4, 3, PAL.woodLight);
+  rect(g, x - 2, y, 2, h, PAL.woodDark);
+  rect(g, x + w, y, 2, h, PAL.woodDark);
+  rect(g, x + w / 2 - 1, y, 2, h, PAL.woodDark);
+  rect(g, x, y + h / 2 - 1, w, 2, PAL.woodDark);
+}
+
+// A pothos hanging from the pipe: a pot on a cord, leaves trailing down.
+function plant(g: G, x: number, y: number): void {
+  line(g, x + 3, y, x + 3, y + 5, PAL.ink);
+  rect(g, x, y + 5, 7, 4, "#8a4b2f");
+  const leaves = [
+    [0, 9], [-1, 11], [1, 13], [-2, 15], [0, 17], [-1, 20], [6, 9], [7, 12], [5, 14], [8, 16], [6, 19], [3, 10], [4, 13],
+  ];
+  for (const [k, [dx, dy]] of leaves.entries()) {
+    rect(g, x + dx, y + dy, 2, 2, k % 3 ? "#3f8f4f" : "#5fb36a");
+  }
+}
+
+// A stack of books lying flat on the floor, titles on their spines, the widest at the bottom.
+function bookStack(g: G, x: number, floor: number, books: [string, string][]): void {
+  books.forEach(([title, colour], k) => {
+    const w = title.length * ADVANCE + 3;
+    const by = floor - 9 * (k + 1);
+    const bx = x + Math.floor((books.length - k - 1) * 2);
+    rect(g, bx, by, w, 9, colour);
+    rect(g, bx, by, w, 1, "#ffffff22");
+    rect(g, bx + w - 2, by + 1, 2, 7, "#d8d2c0"); // the page edges
+    drawText(g, title, bx + 2, by + 1, 1, "#e8dcc0");
+  });
+}
+
+// The desk lamp: a weighted base on the bench, an arm and a shade aimed down at the rig.
+function lampBody(g: G, p: Plan): void {
+  const b = p.bench.y;
+  const x = p.crt.x - 14;
+  rect(g, x - 3, b - 2, 9, 2, "#4a4060");
+  line(g, x + 1, b - 2, x + 4, b - 22, "#6a5f86");
+  line(g, x + 4, b - 22, x - 6, b - 34, "#6a5f86");
+  rect(g, x + 3, b - 23, 3, 3, "#4a4060"); // the elbow
+  rect(g, x - 13, b - 38, 10, 4, "#5a4a6e");
+  rect(g, x - 13, b - 38, 10, 1, "#8a7aa8");
+  rect(g, x - 15, b - 34, 14, 2, "#5a4a6e");
+  rect(g, x - 14, b - 33, 12, 1, PAL.lamp);
+}
+
+function keyboard(g: G, x: number, y: number): void {
+  rect(g, x, y - 2, 38, 3, PAL.housingDark);
+  rect(g, x + 1, y - 2, 36, 1, PAL.housing);
+  for (let k = 0; k < 17; k++) px(g, x + 2 + k * 2, y, "#6e6450");
+}
+
+function mug(g: G, x: number, y: number): void {
+  rect(g, x, y - 7, 7, 7, "#7a2f3a");
+  rect(g, x, y - 7, 7, 1, "#a8505c");
+  rect(g, x + 7, y - 6, 2, 1, "#7a2f3a");
+  rect(g, x + 8, y - 6, 1, 4, "#7a2f3a");
+  rect(g, x + 7, y - 3, 2, 1, "#7a2f3a");
+}
+
 // A wall cabinet with two glass doors, bottles and jars behind them.
 function cabinet(g: G, x: number, y: number, w: number, h: number, seed: number): void {
   rect(g, x, y, w, h, PAL.woodDark);
@@ -396,9 +487,9 @@ function cylinder(g: G, x: number, floor: number): void {
 
 // The test-tube rack at the end of the bench.
 function rack(g: G, x: number, y: number): void {
-  const colours = ["#4aa8ff", "#57e389", PAL.amber, "#c08cff"];
-  rect(g, x, y - 4, 20, 2, PAL.steel);
-  rect(g, x, y - 1, 20, 1, PAL.steelDark);
+  const colours = ["#4aa8ff", "#57e389", "#c08cff"];
+  rect(g, x, y - 4, 15, 2, PAL.steel);
+  rect(g, x, y - 1, 15, 1, PAL.steelDark);
   colours.forEach((c, k) => {
     rect(g, x + 2 + k * 5, y - 12, 3, 11, PAL.glassDim);
     rect(g, x + 2 + k * 5, y - 6 - k, 3, 5 + k, c);
@@ -442,7 +533,6 @@ function crtHousing(g: G, p: Plan): void {
   rect(g, c.x + 1, c.y + 1, c.w - 2, 1, "#e2d6b4");
   rect(g, c.x + 5, c.y + 4, 40, 28, PAL.ink); // the screen's bezel
   rect(g, c.x + c.w - 4, c.y + c.h - 6, 2, 2, PAL.greenDim); // power light, off to one side
-  rect(g, c.x + 12, c.y + c.h, 26, 2, PAL.housingDark); // its foot
 }
 
 // ---------- sprites and moving parts, drawn per frame ----------
@@ -619,6 +709,112 @@ export function crtScreen(g: G, p: Plan, t: number, text: string[] | null): void
     const hgt = 3 + Math.round((Math.sin(t / 500 + k * 1.7) * 0.5 + 0.5) * 7);
     rect(g, sx + 2 + k * 6, sy + 23 - hgt, 4, hgt, k % 2 ? PAL.greenDim : PAL.green);
   }
+}
+
+// The window's stars and the lit windows across the city, changing slowly.
+export function windowLights(g: G, p: Plan, t: number): void {
+  const x = p.x0 + 100;
+  const y = p.top + 17;
+  for (let k = 0; k < 9; k++) {
+    const sx = x + 2 + Math.floor(hash(k, 51) * 40);
+    const sy = y + 2 + Math.floor(hash(k, 53) * 16);
+    g.globalAlpha = 0.45 + 0.55 * Math.abs(Math.sin(t / 900 + k * 1.7));
+    px(g, sx, sy, PAL.white);
+  }
+  g.globalAlpha = 1;
+  const beat = Math.floor(t / 2500);
+  for (let bx = x, k = 0; bx < x + 66; k++) {
+    const bw = 5 + Math.floor(hash(k, 31) * 7);
+    const bh = 10 + Math.floor(hash(k, 37) * 20);
+    for (let j = 0; j < 4; j++) {
+      const wx = bx + 1 + Math.floor(hash(k, j + 60) * (bw - 2));
+      const wy = y + 50 - bh + 2 + Math.floor(hash(k, j + 70) * (bh - 4));
+      if (hash(k * 7 + j, beat) > 0.45) px(g, wx, wy, j % 2 ? "#ffd27a" : "#7ee0ff");
+    }
+    bx += bw + (hash(k, 41) > 0.7 ? 1 : 0);
+  }
+}
+
+// The red LED clock: the visitor's own time, the colon blinking.
+export function clock(g: G, p: Plan, now: Date, t: number): void {
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const colon = Math.floor(t / 500) % 2 === 0 ? ":" : " ";
+  drawText(g, `${hh}${colon}${mm}`, p.x0 + 252, p.top + 18, 1, "#ff3b3b", "#3a0d12");
+}
+
+// The desk lamp's warm light, poured over the bench below its shade.
+export function lampLight(g: G, p: Plan): void {
+  const x = p.crt.x - 22;
+  const y = p.bench.y - 33;
+  const pool = g.createRadialGradient(x, y + 24, 2, x, y + 24, 70);
+  pool.addColorStop(0, "rgba(255, 170, 80, 0.6)");
+  pool.addColorStop(0.45, "rgba(255, 140, 60, 0.24)");
+  pool.addColorStop(1, "rgba(255, 120, 40, 0)");
+  g.globalCompositeOperation = "screen";
+  g.fillStyle = pool;
+  g.fillRect(x - 75, y - 10, 150, 90);
+  g.globalCompositeOperation = "source-over";
+  rect(g, x - 2, y + 1, 4, 1, "#fff2c8"); // the bulb
+}
+
+// The CRT's green light on the wall round it, which the cat on top sits against.
+export function screenGlow(g: G, p: Plan): void {
+  const cx = p.crt.x + p.crt.w / 2;
+  const cy = p.crt.y + 10;
+  const light = g.createRadialGradient(cx, cy, 4, cx, cy, 44);
+  light.addColorStop(0, "rgba(80, 255, 140, 0.28)");
+  light.addColorStop(1, "rgba(80, 255, 140, 0)");
+  g.globalCompositeOperation = "screen";
+  g.fillStyle = light;
+  g.fillRect(cx - 46, cy - 46, 92, 92);
+  g.globalCompositeOperation = "source-over";
+}
+
+// A soft light round a glowing flask.
+export function flaskGlow(g: G, x: number, y: number, colour: string): void {
+  g.globalAlpha = 0.16;
+  rect(g, x - 2, y + 6, FLASK_W + 4, FLASK_H - 4, colour);
+  g.globalAlpha = 0.08;
+  rect(g, x - 4, y + 3, FLASK_W + 8, FLASK_H, colour);
+  g.globalAlpha = 1;
+}
+
+// A black cat asleep on the CRT, curled up, its tail over the side. Now and then the tail's tip
+// flicks or an ear twitches; it never moves otherwise.
+const CAT = [
+  "...#....#...............",
+  "...##..##...............",
+  "..########.....#######..",
+  ".##########..##########.",
+  "########################",
+  "########################",
+  ".######################.",
+  "..####################..",
+];
+export function cat(g: G, p: Plan, t: number): void {
+  const x = p.crt.x + 9;
+  const y = p.crt.y - CAT.length;
+  const beat = Math.floor(t / 250);
+  const twitch = hash(beat, 81) > 0.97; // an ear, for a quarter second now and then
+  const flick = hash(Math.floor(t / 400), 83) > 0.9 ? 1 : 0;
+  const at = (r: number, c: number) => CAT[r]?.[c] === "#";
+  CAT.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      if (!at(r, c)) continue;
+      if (twitch && r === 0 && c === 3) continue;
+      // The neon outlines it: an edge on the top or the sides catches the light.
+      const rim = !at(r - 1, c) || !at(r, c - 1) || !at(r, c + 1);
+      px(g, x + c, y + r, rim ? PAL.catRim : PAL.cat);
+    }
+  });
+  // The tail, down the CRT's right side, its tip curling out when it flicks.
+  for (let k = 0; k < 9; k++) {
+    px(g, x + 22, y + 5 + k, PAL.cat);
+    px(g, x + 23, y + 5 + k, PAL.catRim);
+  }
+  px(g, x + 21 - flick, y + 14, PAL.catRim);
+  px(g, x + 22 - flick, y + 14, PAL.cat);
 }
 
 // ---------- the HUD frame and the screen overlay ----------
