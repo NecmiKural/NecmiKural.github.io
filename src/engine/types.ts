@@ -20,6 +20,9 @@ export interface Stage {
   // Animates over ms, calling step with an eased 0..1. Snaps to 1 under reduced motion or a skip.
   tween(ms: number, step: (t: number) => void, ease?: (t: number) => number): Promise<void>;
   play(motif: Motif): void; // silent unless the visitor turned sound on
+  // Text the scene draws into its picture (a HUD, a display), for the tests: the canvas carries it
+  // as data-caption, as it carries data-held and data-frames.
+  caption(text: string): void;
   readonly lowPower: boolean;
 }
 
@@ -28,6 +31,9 @@ export interface Stage {
 export interface Scene {
   readonly world: World;
   readonly camera: Camera;
+  // When set, the scene renders this many pixels across and the browser scales them up without
+  // smoothing: a low-resolution, pixel-art look.
+  readonly pixelWidth?: number;
   build(projects: readonly Project[]): void;
   layout(aspect: number): void; // also re-reads stage.lowPower
   focus(id: string | null): void;

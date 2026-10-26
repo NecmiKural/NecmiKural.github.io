@@ -10,6 +10,7 @@ import type { CreateScene, Project, Scene, Stage } from "./types.ts";
 
 // Each scene is its own chunk, loaded when chosen. The first is the default.
 const SCENES: { id: string; name: string; load: () => Promise<{ create: CreateScene }> }[] = [
+  { id: "lab", name: "Lab", load: () => import("../scenes/lab.ts") },
   { id: "replay-deck", name: "Replay Deck", load: () => import("../scenes/replay-deck.ts") },
   { id: "switchboard", name: "Switchboard", load: () => import("../scenes/switchboard.ts") },
   { id: "glovebox", name: "Glovebox", load: () => import("../scenes/glovebox.ts") },
@@ -154,6 +155,9 @@ export async function boot(o: BootOptions): Promise<void> {
     invalidate: loop.invalidate,
     tween: loop.tween,
     play: (motif) => sound.play(motif),
+    caption: (text) => {
+      o.canvas.dataset.caption = text;
+    },
     get lowPower() {
       return lowPower;
     },
@@ -161,8 +165,16 @@ export async function boot(o: BootOptions): Promise<void> {
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = o.canvas;
     if (!w || !h) return;
-    renderer.setPixelRatio(lowPower ? 1 : Math.min(devicePixelRatio, 1.5));
-    renderer.setSize(w, h, false);
+    const pixels = scene?.pixelWidth;
+    o.canvas.style.imageRendering = pixels ? "pixelated" : "";
+    if (pixels) {
+      // Exactly that many pixels across, and as many down as keep the shape; CSS scales them up.
+      renderer.setPixelRatio(1);
+      renderer.setSize(pixels, Math.round((pixels * h) / w), false);
+    } else {
+      renderer.setPixelRatio(lowPower ? 1 : Math.min(devicePixelRatio, 1.5));
+      renderer.setSize(w, h, false);
+    }
     scene?.layout(w / h);
     loop.invalidate();
   };

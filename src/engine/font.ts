@@ -1,9 +1,11 @@
-// An original 5x7 bitmap font, as data, for every label and display in the 3D scenes. Each glyph
+// An original 5x7 bitmap font, as data, for every label and display in the 3D scenes: the profile
+// banner's hand-made glyphs (scripts/portfolio.py in NecmiKural/NecmiKural), extended to the rest
+// of the alphabet, digits and punctuation in the same style. Each glyph
 // is seven rows, top to bottom, one base-32 digit per row; of a row's five bits, 16 is the
 // leftmost column. Unknown characters draw as "?".
 const GLYPHS: Record<string, string> = {
   A: "ehhvhhh", B: "uhhuhhu", C: "ehggghe", D: "sihhhis", E: "vgguggv", F: "vgguggg",
-  G: "ehgnhhf", H: "hhhvhhh", I: "e44444e", J: "72222ic", K: "hikokih", L: "ggggggv",
+  G: "ehgnhhe", H: "hhhvhhh", I: "e44444e", J: "72222ic", K: "hikokih", L: "ggggggv",
   M: "hrllhhh", N: "hhpljhh", O: "ehhhhhe", P: "uhhuggg", Q: "ehhhlid", R: "uhhukih",
   S: "fgge11u", T: "v444444", U: "hhhhhhe", V: "hhhhha4", W: "hhhllla", X: "hha4ahh",
   Y: "hhha444", Z: "v1248gv",

@@ -30,7 +30,7 @@ The copy check looks for em and en dashes, generic banned phrases, email and pho
 
 ## 3D mode
 
-`src/main.ts` is the only script the page loads (under 2 KB gzip). On "Open in 3D" it checks for WebGL 2 and loads the engine in `src/engine/` (three.js, the dialogs, sound, rendering on demand), which builds the scene from the page's own articles; the panel shows a copy of the article. Each scene is a chunk of its own in `src/scenes/`: the Replay Deck (the default), the Switchboard, the Glovebox and the Signal Box, chosen in the toolbar. Everything is procedural: no model files, image textures or web fonts.
+`src/main.ts` is the only script the page loads (under 2 KB gzip). On "Open in 3D" it checks for WebGL 2 and loads the engine in `src/engine/` (three.js, the dialogs, sound, rendering on demand), which builds the scene from the page's own articles; the panel shows a copy of the article. Each scene is a chunk of its own in `src/scenes/`: the Lab (the default, drawn as 80s pixel art), the Replay Deck, the Switchboard, the Glovebox and the Signal Box, chosen in the toolbar. Everything is procedural: no model files, image textures or web fonts.
 
 The project list is plain links to the articles (`scripts/render.ts`), so it works with JavaScript off. On screens 1080 px and wider `src/main.ts` opens it and marks the project being read with `aria-current`.
 
