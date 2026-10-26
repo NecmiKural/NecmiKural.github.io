@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "webkit", testMatch: html, use: devices["Desktop Safari"] },
     {
       name: "3d",
-      testMatch: /deck\.spec\.ts/,
+      testMatch: /(deck|auto)\.spec\.ts/,
       // Software rendering is slow: a heavy scene's frames take about 0.3 s each, so a 1.6 s load
       // can take over 4 s to finish. Timing claims are checked by their own assertions.
       timeout: 60_000,
