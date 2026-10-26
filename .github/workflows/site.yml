@@ -33,7 +33,7 @@ jobs:
           PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
       - run: npm run size
       # The browsers' system packages are about 120 MB from the Ubuntu mirror, which now and then
-      # crawls at 100 KB/s (run 40261475018). apt is not killed and retried, which left it holding
+      # crawls at 100 KB/s. apt is not killed and retried, which left it holding
       # the dpkg lock; instead its .deb files are cached, so a run downloads only what changed.
       - name: Cache key for the browsers' system packages
         id: debs-key
