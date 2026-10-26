@@ -186,7 +186,7 @@ for (const scene of SCENES) {
         const w = window as unknown as { t0: number; t1: number };
         return w.t1 - w.t0;
       });
-      expect(ms).toBeLessThan(600); // the full animation takes about 1.1 s
+      expect(ms).toBeLessThan(600); // a full load takes over 1 s in every scene
     });
 
     test("powering on fetches no models, images or fonts, and nothing from other sites", async ({ page, baseURL }) => {
@@ -268,28 +268,49 @@ for (const scene of SCENES) {
       await expect(sound).toHaveAttribute("aria-pressed", "true");
     });
 
-    test("the pointer: a project under the cursor shows a pointer, and a click opens it", async ({ page }) => {
-      await powerOn(page, scene);
-      const canvas = page.locator("#deck canvas");
-      const box = (await canvas.boundingBox()) as { x: number; y: number; width: number; height: number };
-      let hit: { x: number; y: number } | null = null;
-      for (let gy = 1; gy < 12 && !hit; gy++) {
-        for (let gx = 1; gx < 16 && !hit; gx++) {
-          const x = box.x + (box.width * gx) / 16;
-          const y = box.y + (box.height * gy) / 12;
-          await page.mouse.move(x, y);
-          if ((await canvas.evaluate((c) => (c as HTMLElement).style.cursor)) === "pointer") hit = { x, y };
-        }
-      }
-      expect(hit, "no project under any point of a 15 x 11 grid").not.toBeNull();
-      const { x, y } = hit as { x: number; y: number };
-      await page.mouse.click(x, y);
-      await expect(page.locator("#panel-title")).toBeFocused();
-      const id = await held(page).getAttribute("data-held");
-      const project = data.projects.find((p) => p.id === id);
-      expect(project, `held ${id}`).toBeDefined();
-      await expect(page.locator("#panel-title")).toHaveAccessibleName((project as { title: string }).title);
-    });
+    // A sweep over the canvas must point at every project; then a click opens one. The portrait
+    // size also runs the stacked layouts.
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 480, height: 900 },
+    ]) {
+      test(`the pointer reaches every project at ${viewport.width} x ${viewport.height}, and a click opens one`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await powerOn(page, scene);
+        // Pointer moves over a 47 x 39 grid, dispatched in the page (the same handler a real mouse
+        // runs, but fast enough for software rendering). Returns, for each project hit, the middle
+        // of the points that hit it: a hovered object slides forward, so an edge point can miss.
+        const hits = await page.evaluate(() => {
+          const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+          const r = c.getBoundingClientRect();
+          const found: Record<string, { x: number; y: number; n: number }> = {};
+          for (let gy = 1; gy < 40; gy++) {
+            for (let gx = 1; gx < 48; gx++) {
+              const x = r.left + (r.width * gx) / 48;
+              const y = r.top + (r.height * gy) / 40;
+              c.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y, bubbles: true }));
+              const id = c.dataset.pointed;
+              if (!id) continue;
+              const f = (found[id] ??= { x: 0, y: 0, n: 0 });
+              f.x += x;
+              f.y += y;
+              f.n += 1;
+            }
+          }
+          for (const f of Object.values(found)) Object.assign(f, { x: f.x / f.n, y: f.y / f.n });
+          return found;
+        });
+        expect(ids.filter((id) => !hits[id]), "projects the pointer never reached").toEqual([]);
+        // A real click on one of them opens it.
+        const id = ids[ids.length - 1];
+        const { x, y } = hits[id];
+        await page.mouse.click(x, y);
+        await expect(page.locator("#panel-title")).toBeFocused();
+        await expect(held(page)).toHaveAttribute("data-held", id);
+        const project = data.projects.find((p) => p.id === id) as { title: string };
+        await expect(page.locator("#panel-title")).toHaveAccessibleName(project.title);
+      });
+    }
 
     test("low power: toggling it keeps the scene working", async ({ page }) => {
       const errors: string[] = [];

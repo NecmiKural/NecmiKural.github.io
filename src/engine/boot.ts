@@ -2,7 +2,7 @@
 // from the page) and the canvas, then loads the chosen scene. Everything the scenes share lives
 // here: rendering on demand, the project panel, sound, low power, reduced motion and failures.
 
-import { Raycaster, Vector2, WebGLRenderer, type Object3D } from "three";
+import { Mesh, Raycaster, Vector2, WebGLRenderer, type Object3D } from "three";
 import css from "./engine.css?inline";
 import { createLoop } from "./loop.ts";
 import { createSound, read, write, type Motif } from "./sound.ts";
@@ -260,7 +260,8 @@ export async function boot(o: BootOptions): Promise<void> {
     const r = o.canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, ((r.top - e.clientY) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, scene.camera);
-    let obj: Object3D | null = ray.intersectObject(scene.world, true)[0]?.object ?? null;
+    // Meshes only: lines (such as glass drawn as edges) have a pick margin of a whole unit.
+    let obj: Object3D | null = ray.intersectObject(scene.world, true).find((hit) => hit.object instanceof Mesh)?.object ?? null;
     while (obj && !obj.userData.id) obj = obj.parent;
     return (obj?.userData.id as string | undefined) ?? null;
   };
@@ -278,6 +279,7 @@ export async function boot(o: BootOptions): Promise<void> {
     guard((e: PointerEvent) => {
       const id = pick(e);
       o.canvas.style.cursor = id ? "pointer" : "";
+      o.canvas.dataset.pointed = id ?? ""; // for the tests, like data-held
       highlight(id ?? railFocus());
     }),
   );

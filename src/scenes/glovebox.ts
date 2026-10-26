@@ -40,7 +40,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { drawText, mark, wrap } from "../engine/font.ts";
-import { atlasPlane, disposeAll, drawnBox, fit, GROUP_COLOURS, toonMaker, type Rect } from "../engine/kit.ts";
+import { atlasPlane, disposeAll, drawnBox, fit, GROUP_COLOURS, slides, toonMaker, type Rect } from "../engine/kit.ts";
 import { easeInOut, linear } from "../engine/loop.ts";
 import type { Motif } from "../engine/sound.ts";
 import type { CreateScene, Project } from "../engine/types.ts";
@@ -305,7 +305,6 @@ export const create: CreateScene = (stage) => {
 
   const cans = new Map<string, Group>();
   const homes = new Map<string, Vector3>();
-  const slide = new Map<string, number>(); // how far each canister is pulled forward, 0..1
   const byId = new Map<string, Project>();
   const accepted = new Set<string>();
   let rackW = 0;
@@ -318,19 +317,13 @@ export const create: CreateScene = (stage) => {
   const idle = () => display("READY", accepted.size ? `ACCEPTED ${accepted.size}/${byId.size}` : `${byId.size} SAMPLES`);
   const describe = (p: Project) => display(first(p), p.ref ?? shelfName(p.group));
 
-  const place = (id: string) => {
+  // How far each one is pulled forward when it has focus.
+  const slide = slides(stage, (id, amount) => {
     const can = cans.get(id) as Group;
     if (can.parent !== rack || can === moving) return;
-    can.position.z = (homes.get(id) as Vector3).z + 0.16 * (slide.get(id) ?? 0);
-  };
-  const pull = (id: string, to: number) => {
-    const from = slide.get(id) ?? 0;
-    if (from === to) return;
-    void stage.tween(140, (t) => {
-      slide.set(id, from + (to - from) * t);
-      place(id);
-    });
-  };
+    can.position.z = (homes.get(id) as Vector3).z + 0.16 * amount;
+  });
+  const pull = slide.pull;
   const showLit = () => {
     lit.visible = focused !== null && focused !== playing;
   };
@@ -452,7 +445,7 @@ export const create: CreateScene = (stage) => {
         a.fillRect(x + 2, y + 2, 124, 124);
         a.fillStyle = GROUP_COLOURS[p.group] ?? YELLOW;
         a.fillRect(x + 2, y + 2, 124, 10);
-        const lines = wrap(p.title, 9);
+        const lines = wrap(p.title, 8); // clear of the mark in the top right corner
         if (lines.length > 5) lines.splice(4, Infinity, `${lines[4].slice(0, 7)}..`);
         lines.forEach((line, i) => drawText(a, line, x + 8, y + 18 + i * 16, 2, INK));
         drawText(a, (p.ref ?? shelfName(p.group)).slice(0, 9), x + 8, y + 104, 2, INK);
@@ -500,8 +493,16 @@ export const create: CreateScene = (stage) => {
         lab.position.set(0.6, rackH, (RACK_D - LAB.d) / 2); // off centre, so the pair reads as furniture
       }
       world.updateMatrixWorld();
+      // The same framing whatever the doors are doing: the box without them, the outer door's
+      // open sweep, and the top of a canister's flight.
+      outer.visible = inner.visible = false;
+      const box = drawnBox(lab);
+      outer.visible = inner.visible = true;
+      const swept = new Box3()
+        .setFromCenterAndSize(new Vector3(OUTER + 0.45, CHAMBER.y, 0.5), new Vector3(1, 0.95, 1))
+        .applyMatrix4(lab.matrixWorld);
       const apex = new Box3().setFromCenterAndSize(doorFront().add(new Vector3(0, 0.5, 0.3)), new Vector3(0.4, 0.5, 0.4));
-      fit(camera, [drawnBox(rack), drawnBox(lab), apex], aspect, VIEW);
+      fit(camera, [drawnBox(rack), box, swept, apex], aspect, VIEW);
       stage.invalidate();
     },
 
@@ -615,7 +616,7 @@ export const create: CreateScene = (stage) => {
       rack.attach(can);
       can.position.copy(homes.get(id) as Vector3);
       can.rotation.set(0, 0, 0);
-      slide.set(id, 0);
+      slide.reset(id);
       moving = null;
       playing = null;
       stage.play(DOOR);

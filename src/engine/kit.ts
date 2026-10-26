@@ -19,6 +19,7 @@ import {
   type Object3D,
   type PerspectiveCamera,
 } from "three";
+import type { Stage } from "./types.ts";
 
 // The band colour of each project group, the same in every scene.
 export const GROUP_COLOURS: Record<string, string> = {
@@ -110,6 +111,30 @@ export function drawnBox(root: Object3D): Box3 {
     if (local && !local.isEmpty()) box.union(local.clone().applyMatrix4(o.matrixWorld));
   });
   return box;
+}
+
+// Eases how far each object is pulled out (0..1) and calls `apply` with the amount. A newer pull
+// on the same object supersedes one still running, so a quick change of focus cannot leave an
+// object stuck out.
+export function slides(stage: Stage, apply: (id: string, amount: number) => void) {
+  const amount = new Map<string, number>();
+  const goal = new Map<string, number>();
+  return {
+    pull(id: string, to: number) {
+      if ((goal.get(id) ?? 0) === to) return;
+      goal.set(id, to);
+      const from = amount.get(id) ?? 0;
+      void stage.tween(140, (t) => {
+        if (goal.get(id) !== to) return;
+        amount.set(id, from + (to - from) * t);
+        apply(id, amount.get(id) as number);
+      });
+    },
+    reset(id: string) {
+      goal.set(id, 0);
+      amount.set(id, 0);
+    },
+  };
 }
 
 // Frees every geometry and material of the meshes and lines under the root, plus any extra
