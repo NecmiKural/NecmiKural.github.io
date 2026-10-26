@@ -180,33 +180,40 @@ test.describe("on a phone", () => {
   });
 });
 
-test("a project's visual shows in the panel, rises in as it opens, and plays there", async ({ page }) => {
-  const p = data.projects.find((x) => x.urls.visual?.endsWith(".gif")) as Portfolio["projects"][number];
+// The first project with a moving visual, and that visual.
+const movingProject = data.projects.find((x) => x.visuals.some((v) => v.url.endsWith(".gif"))) as Portfolio["projects"][number];
+const movingVisual = movingProject.visuals.find((v) => v.url.endsWith(".gif")) as Portfolio["projects"][number]["visuals"][number];
+
+test("a project's visual shows in the panel, rises in as it opens, and stops and plays there", async ({ page }) => {
+  const p = movingProject;
   await powerOn(page);
   await rail(page, p.id).focus();
   await page.keyboard.press("Enter");
-  const img = page.locator("#panel img.visual");
+  const img = page.locator("#panel img[data-play]");
   await expect(img).toBeVisible();
-  await expect(img).toHaveAttribute("alt", p.visual_alt as string);
+  await expect(img).toHaveAttribute("alt", movingVisual.alt);
   expect(await img.evaluate((i) => getComputedStyle(i).animationName)).toBe("panel-rise");
   await expect(img).toHaveCSS("opacity", "1");
-  await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+  await expect(img).toHaveAttribute("src", /\.gif$/);
+  await expect(img).not.toHaveAttribute("src", /-still\.gif$/);
   await page.locator("#panel button.play").click();
-  await expect(img).toHaveAttribute("src", `visuals/${p.id}.gif`);
+  await expect(img).toHaveAttribute("src", /-still\.gif$/);
   await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+  await page.locator("#panel button.play").click();
+  await expect(img).not.toHaveAttribute("src", /-still\.gif$/);
 });
 
 test.describe("with reduced motion, the panel", () => {
   test.use({ reducedMotion: "reduce" });
 
   test("shows the visual still: the GIF's first frame, no rise", async ({ page }) => {
-    const p = data.projects.find((x) => x.urls.visual?.endsWith(".gif")) as Portfolio["projects"][number];
+    const p = movingProject;
     await powerOn(page);
     await rail(page, p.id).focus();
     await page.keyboard.press("Enter");
-    const img = page.locator("#panel img.visual");
+    const img = page.locator("#panel img[data-play]");
     await expect(img).toBeVisible();
-    await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+    await expect(img).toHaveAttribute("src", /-still\.gif$/);
     await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
     expect(await img.evaluate((i) => getComputedStyle(i).animationName)).toBe("none");
   });
