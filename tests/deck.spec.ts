@@ -59,7 +59,7 @@ test("focus order: header links, Power on, then the rail; arrows, Home and End m
   await expect(rail(page, ids.at(-2) as string)).toBeFocused();
   // Before the rail, in reverse: the toolbar.
   await page.keyboard.press("Home");
-  for (const name of ["Power off", "Low power", "Sound", "Switchboard", "Replay Deck"]) {
+  for (const name of ["Power off", "Low power", "Sound", "Glovebox", "Switchboard", "Replay Deck"]) {
     await page.keyboard.press("Shift+Tab");
     await expect(bar(page, name)).toBeFocused();
   }
@@ -74,7 +74,8 @@ test("Replay Deck is the default; the switcher loads each scene's chunk on deman
   await powerOn(page);
   await expect(bar(page, "Replay Deck")).toHaveAttribute("aria-pressed", "true");
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "false");
-  expect(chunks.filter((c) => c.includes("/switchboard-"))).toEqual([]);
+  const others = SCENES.filter((s) => s !== "replay-deck");
+  expect(chunks.filter((c) => others.some((s) => c.includes(`/${s}-`)))).toEqual([]); // nothing loads unasked
   const before = await frames(page);
   await bar(page, "Switchboard").click();
   await expect(bar(page, "Switchboard")).toHaveAttribute("aria-pressed", "true");
@@ -185,7 +186,7 @@ for (const scene of SCENES) {
         const w = window as unknown as { t0: number; t1: number };
         return w.t1 - w.t0;
       });
-      expect(ms).toBeLessThan(600); // the full animation takes about 1.1 s
+      expect(ms).toBeLessThan(600); // a full load takes over 1 s in every scene
     });
 
     test("powering on fetches no models, images or fonts, and nothing from other sites", async ({ page, baseURL }) => {
@@ -209,7 +210,8 @@ for (const scene of SCENES) {
       expect(await frames(page)).toBe(idle);
       await openAndClose(page);
       await expect(rail(page, ids[0])).toBeFocused();
-      await page.waitForTimeout(1000); // the eject settles
+      await expect(held(page)).toHaveAttribute("data-held", ""); // the eject has finished
+      await page.waitForTimeout(300); // and the highlight that follows it
       const after = await frames(page);
       expect(after).toBeGreaterThan(idle);
       await page.waitForTimeout(1000);
@@ -266,27 +268,72 @@ for (const scene of SCENES) {
       await expect(sound).toHaveAttribute("aria-pressed", "true");
     });
 
-    test("the pointer: a project under the cursor shows a pointer, and a click opens it", async ({ page }) => {
+    // A sweep over the canvas must point at every project; then a click opens one. The portrait
+    // size also runs the stacked layouts.
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 480, height: 900 },
+    ]) {
+      test(`the pointer reaches every project at ${viewport.width} x ${viewport.height}, and a click opens one`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await powerOn(page, scene);
+        // Pointer moves over a 47 x 39 grid, dispatched in the page (the same handler a real mouse
+        // runs, but fast enough for software rendering). Returns, for each project hit, the middle
+        // of the points that hit it: a hovered object slides forward, so an edge point can miss.
+        const hits = await page.evaluate(() => {
+          const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+          const r = c.getBoundingClientRect();
+          const found: Record<string, { x: number; y: number; n: number }> = {};
+          for (let gy = 1; gy < 40; gy++) {
+            for (let gx = 1; gx < 48; gx++) {
+              const x = r.left + (r.width * gx) / 48;
+              const y = r.top + (r.height * gy) / 40;
+              c.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y, bubbles: true }));
+              const id = c.dataset.pointed;
+              if (!id) continue;
+              const f = (found[id] ??= { x: 0, y: 0, n: 0 });
+              f.x += x;
+              f.y += y;
+              f.n += 1;
+            }
+          }
+          for (const f of Object.values(found)) Object.assign(f, { x: f.x / f.n, y: f.y / f.n });
+          return found;
+        });
+        expect(ids.filter((id) => !hits[id]), "projects the pointer never reached").toEqual([]);
+        // A real click on one of them opens it.
+        const id = ids[ids.length - 1];
+        const { x, y } = hits[id];
+        await page.mouse.click(x, y);
+        await expect(page.locator("#panel-title")).toBeFocused();
+        await expect(held(page)).toHaveAttribute("data-held", id);
+        const project = data.projects.find((p) => p.id === id) as { title: string };
+        await expect(page.locator("#panel-title")).toHaveAccessibleName(project.title);
+      });
+    }
+
+    test("the pointer finds projects before the first frame is drawn", async ({ page }) => {
+      // With requestAnimationFrame held back nothing renders, so picking must not depend on it.
+      await page.addInitScript(() => {
+        window.requestAnimationFrame = () => 0;
+      });
       await powerOn(page, scene);
-      const canvas = page.locator("#deck canvas");
-      const box = (await canvas.boundingBox()) as { x: number; y: number; width: number; height: number };
-      let hit: { x: number; y: number } | null = null;
-      for (let gy = 1; gy < 12 && !hit; gy++) {
-        for (let gx = 1; gx < 16 && !hit; gx++) {
-          const x = box.x + (box.width * gx) / 16;
-          const y = box.y + (box.height * gy) / 12;
-          await page.mouse.move(x, y);
-          if ((await canvas.evaluate((c) => (c as HTMLElement).style.cursor)) === "pointer") hit = { x, y };
+      const reached = await page.evaluate(() => {
+        const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+        const r = c.getBoundingClientRect();
+        const found = new Set<string>();
+        for (let gy = 1; gy < 40; gy++) {
+          for (let gx = 1; gx < 48; gx++) {
+            const x = r.left + (r.width * gx) / 48;
+            const y = r.top + (r.height * gy) / 40;
+            c.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y, bubbles: true }));
+            if (c.dataset.pointed) found.add(c.dataset.pointed);
+          }
         }
-      }
-      expect(hit, "no project under any point of a 15 x 11 grid").not.toBeNull();
-      const { x, y } = hit as { x: number; y: number };
-      await page.mouse.click(x, y);
-      await expect(page.locator("#panel-title")).toBeFocused();
-      const id = await held(page).getAttribute("data-held");
-      const project = data.projects.find((p) => p.id === id);
-      expect(project, `held ${id}`).toBeDefined();
-      await expect(page.locator("#panel-title")).toHaveAccessibleName((project as { title: string }).title);
+        return { ids: [...found], frames: c.dataset.frames ?? "" };
+      });
+      expect(reached.frames, "a frame was drawn").toBe("");
+      expect(ids.filter((id) => !reached.ids.includes(id))).toEqual([]);
     });
 
     test("low power: toggling it keeps the scene working", async ({ page }) => {

@@ -27,7 +27,7 @@ import {
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { drawText, mark, wrap } from "../engine/font.ts";
-import { atlasPlane, disposeAll, fit, GROUP_COLOURS, outline, toonMaker, type Rect } from "../engine/kit.ts";
+import { atlasPlane, disposeAll, fit, GROUP_COLOURS, outline, slides, toonMaker, type Rect } from "../engine/kit.ts";
 import { easeInOut, linear } from "../engine/loop.ts";
 import type { Motif } from "../engine/sound.ts";
 import type { CreateScene, Project } from "../engine/types.ts";
@@ -197,7 +197,6 @@ export const create: CreateScene = (stage) => {
 
   const tapes = new Map<string, Group>();
   const homes = new Map<string, Vector3>();
-  const slide = new Map<string, number>(); // how far each cassette is pulled out, 0..1
   const byId = new Map<string, Project>();
   const played = new Set<string>();
   let rackW = 0;
@@ -212,19 +211,13 @@ export const create: CreateScene = (stage) => {
   const describe = (p: Project) => display(first(p), p.tag ?? shelfName(p.group));
   const slotIn = () => new Vector3(SLOT.x, DECK.h - TAPE.h / 2 - 0.04, SLOT.z);
 
-  const place = (id: string) => {
+  // How far each one is pulled forward when it has focus.
+  const slide = slides(stage, (id, amount) => {
     const tape = tapes.get(id) as Group;
     if (tape.parent !== rack || tape === moving) return;
-    tape.position.z = (homes.get(id) as Vector3).z + 0.22 * (slide.get(id) ?? 0);
-  };
-  const pull = (id: string, to: number) => {
-    const from = slide.get(id) ?? 0;
-    if (from === to) return;
-    void stage.tween(140, (t) => {
-      slide.set(id, from + (to - from) * t);
-      place(id);
-    });
-  };
+    tape.position.z = (homes.get(id) as Vector3).z + 0.22 * amount;
+  });
+  const pull = slide.pull;
   const showRing = () => {
     ring.visible = focused !== null && focused !== playing && !stage.lowPower;
   };
@@ -428,7 +421,7 @@ export const create: CreateScene = (stage) => {
       playing = null;
       tape.rotation.set(0, 0, 0);
       tape.position.copy(homes.get(id) as Vector3);
-      slide.set(id, 0);
+      slide.reset(id);
       if (focused === id) {
         tape.add(ring);
         pull(id, 1);

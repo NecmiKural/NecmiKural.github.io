@@ -6,6 +6,7 @@ import {
   Box3,
   DataTexture,
   InstancedMesh,
+  Line,
   Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
@@ -18,6 +19,7 @@ import {
   type Object3D,
   type PerspectiveCamera,
 } from "three";
+import type { Stage } from "./types.ts";
 
 // The band colour of each project group, the same in every scene.
 export const GROUP_COLOURS: Record<string, string> = {
@@ -94,6 +96,7 @@ export function fit(camera: PerspectiveCamera, boxes: Box3[], aspect: number, vi
   camera.near = distance / 20;
   camera.far = distance * 6;
   camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(); // picking can run before the first frame renders
 }
 
 // The bounds of what is drawn. Invisible helpers (pick targets, a hidden cord or ring) do not count,
@@ -102,7 +105,7 @@ export function drawnBox(root: Object3D): Box3 {
   root.updateWorldMatrix(true, true);
   const box = new Box3();
   root.traverseVisible((o) => {
-    if (!(o instanceof Mesh)) return;
+    if (!(o instanceof Mesh || o instanceof Line)) return;
     if (o instanceof InstancedMesh) o.computeBoundingBox();
     else o.geometry.computeBoundingBox();
     const local = o instanceof InstancedMesh ? o.boundingBox : o.geometry.boundingBox;
@@ -111,11 +114,36 @@ export function drawnBox(root: Object3D): Box3 {
   return box;
 }
 
-// Frees every geometry, material and texture under the root, plus any extra resources.
+// Eases how far each object is pulled out (0..1) and calls `apply` with the amount. A newer pull
+// on the same object supersedes one still running, so a quick change of focus cannot leave an
+// object stuck out.
+export function slides(stage: Stage, apply: (id: string, amount: number) => void) {
+  const amount = new Map<string, number>();
+  const goal = new Map<string, number>();
+  return {
+    pull(id: string, to: number) {
+      if ((goal.get(id) ?? 0) === to) return;
+      goal.set(id, to);
+      const from = amount.get(id) ?? 0;
+      void stage.tween(140, (t) => {
+        if (goal.get(id) !== to) return;
+        amount.set(id, from + (to - from) * t);
+        apply(id, amount.get(id) as number);
+      });
+    },
+    reset(id: string) {
+      goal.set(id, 0);
+      amount.set(id, 0);
+    },
+  };
+}
+
+// Frees every geometry and material of the meshes and lines under the root, plus any extra
+// resources (textures).
 export function disposeAll(root: Object3D, extra: { dispose(): void }[]): void {
   const owned = new Set<{ dispose(): void }>(extra);
   root.traverse((o) => {
-    if (!(o instanceof Mesh)) return;
+    if (!(o instanceof Mesh || o instanceof Line)) return;
     if (o instanceof InstancedMesh) owned.add(o); // frees its instance buffers
     owned.add(o.geometry);
     for (const m of [o.material].flat() as Material[]) owned.add(m);
