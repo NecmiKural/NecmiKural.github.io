@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { defineConfig, type Plugin } from "vite";
-import { renderPage, svgSize, type Portfolio, type Sizes } from "./scripts/render.ts";
+import { firstFrame, imageSize, renderPage, type Portfolio, type Sizes } from "./scripts/render.ts";
 
-// Renders index.html from the vendored content file. The flagship visuals are fetched from
-// their repos at the pinned tag or commit into public/visuals, so the site serves them itself.
+// Renders index.html from the vendored content file. The project visuals are fetched from their
+// repos at the pinned commit into public/visuals, so the site serves them itself; a GIF also
+// gets a still of its first frame, for visitors who ask for less motion.
 function portfolio(): Plugin {
   let data: Portfolio;
   let sizes: Sizes = {};
@@ -22,10 +23,17 @@ function portfolio(): Plugin {
             }
             const res = await fetch(url);
             if (!res.ok) throw new Error(`${p.id}: ${url} returned ${res.status}`);
-            const svg = await res.text();
-            const size = svgSize(svg, url);
-            await writeFile(`public/visuals/${p.id}.svg`, svg);
-            return [p.id, size] as const;
+            const bytes = new Uint8Array(await res.arrayBuffer());
+            const { kind, width, height } = imageSize(bytes, url);
+            if (!url.endsWith(`.${kind}`)) throw new Error(`${p.id}: ${url} is not a ${kind} file`);
+            const file = `${p.id}.${kind}`;
+            await writeFile(`public/visuals/${file}`, bytes);
+            let still: string | undefined;
+            if (kind === "gif") {
+              still = `${p.id}-still.gif`;
+              await writeFile(`public/visuals/${still}`, firstFrame(bytes, url));
+            }
+            return [p.id, { width, height, file, still }] as const;
           }),
       );
       sizes = Object.fromEntries(fetched);

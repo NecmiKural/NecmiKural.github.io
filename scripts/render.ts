@@ -37,6 +37,7 @@ export interface Project {
   stack: string[];
   byline: string;
   visual_alt?: string;
+  visual_caption?: string;
   demo_note?: string;
   urls: {
     repo: string;
@@ -56,7 +57,8 @@ export interface Portfolio {
   links: Link[];
   projects: Project[];
 }
-export type Sizes = Record<string, { width: number; height: number }>;
+// Each visual as served from public/visuals: its file, its size, and for a moving image a still.
+export type Sizes = Record<string, { width: number; height: number; file: string; still?: string }>;
 
 export const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -91,6 +93,37 @@ export function svgSize(svg: string, where: string): { width: number; height: nu
   return { width: Math.round(Number(box[1])), height: Math.round(Number(box[2])) };
 }
 
+// The kind and pixel size of a fetched visual, from its own bytes: PNG and GIF headers, or the
+// viewBox of an SVG (which must hold no script).
+export function imageSize(bytes: Uint8Array, where: string): { kind: "svg" | "png" | "gif"; width: number; height: number } {
+  const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  if (bytes[0] === 0x89 && ascii(1, 4) === "PNG") {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { kind: "png", width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  if (ascii(0, 4) === "GIF8") return { kind: "gif", width: bytes[6] | (bytes[7] << 8), height: bytes[8] | (bytes[9] << 8) };
+  return { kind: "svg", ...svgSize(new TextDecoder().decode(bytes), where) };
+}
+
+// The first frame of a GIF, as a GIF of its own: everything up to the end of the first image,
+// then the trailer. Served instead of the moving image to visitors who ask for less motion.
+export function firstFrame(gif: Uint8Array, where: string): Uint8Array {
+  const table = (packed: number) => (packed & 0x80 ? 3 * 2 ** ((packed & 7) + 1) : 0);
+  const blocks = (at: number) => {
+    while (gif[at] !== 0) at += gif[at] + 1; // data sub-blocks, up to the empty one
+    return at + 1;
+  };
+  let at = 13 + table(gif[10]);
+  while (at < gif.length) {
+    if (gif[at] === 0x21) at = blocks(at + 2); // an extension: label, then its sub-blocks
+    else if (gif[at] === 0x2c) {
+      at = blocks(at + 10 + table(gif[at + 9]) + 1); // descriptor, colour table, LZW size, data
+      return Uint8Array.of(...gif.subarray(0, at), 0x3b);
+    } else break;
+  }
+  throw new Error(`${where}: no image in the GIF`);
+}
+
 function a(url: string, text: string, suffix = ""): string {
   return `<a href="${href(url)}">${esc(text)}${suffix}</a>`;
 }
@@ -122,10 +155,16 @@ function article(p: Project, sizes: Sizes): string {
   );
   let visual = "";
   if (p.urls.visual) {
-    const size = need(sizes[p.id], `${where} visual size`);
-    visual =
-      `<img class="visual" src="visuals/${p.id}.svg" alt="${esc(need(p.visual_alt, `${where}.visual_alt`))}"` +
-      ` width="${size.width}" height="${size.height}" loading="lazy" decoding="async">`;
+    const v = need(sizes[p.id], `${where} visual size`);
+    const img =
+      `<img class="visual" src="visuals/${v.file}" alt="${esc(need(p.visual_alt, `${where}.visual_alt`))}"` +
+      ` width="${v.width}" height="${v.height}" loading="lazy" decoding="async">`;
+    // A moving image holds still for visitors who ask for less motion.
+    const media = v.still
+      ? `<picture><source media="(prefers-reduced-motion: reduce)" srcset="visuals/${v.still}">${img}</picture>`
+      : img;
+    const caption = p.visual_caption ? `<figcaption>${esc(p.visual_caption)}</figcaption>` : "";
+    visual = `<figure class="figure">${media}${caption}</figure>`;
   }
   const row = linkRow(p);
   return [

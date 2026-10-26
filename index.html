@@ -45,7 +45,17 @@ h3 { font-size: 1.35rem; line-height: 1.25; margin: 0; }
 .claims { padding-left: 1rem; border-left: 3px solid var(--accent); list-style: none; }
 .claims li + li { margin-top: .6rem; }
 .src { font-family: var(--mono); font-size: .75rem; white-space: nowrap; }
-.visual { display: block; width: 100%; height: auto; margin: 1rem 0; border: 1px solid var(--rule); border-radius: 6px; }
+.figure { margin: 1rem 0; }
+.visual { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 6px; }
+.figure figcaption { margin-top: .45rem; color: var(--muted); font-size: .85rem; }
+/* Visuals rise into place as they scroll into view, where the browser can tie an animation to
+   scrolling; nothing moves for visitors who ask for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .visual { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 70%; }
+  }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(1.25rem) scale(.98); } }
 .more { margin: .75rem 0 0; }
 #power-row p { margin: 0 0 .5rem; }
 #power {

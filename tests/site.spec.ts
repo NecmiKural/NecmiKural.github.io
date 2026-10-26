@@ -108,6 +108,59 @@ test.describe("the project list", () => {
   });
 });
 
+test.describe("project visuals", () => {
+  const shown = data.projects.filter((p) => p.urls.visual);
+
+  test("each is served by this site, sized, described, captioned and loaded lazily", async ({ page }) => {
+    await page.goto("/");
+    expect(shown.length).toBeGreaterThanOrEqual(7);
+    for (const p of shown) {
+      const img = page.locator(`#${p.id} figure img.visual`);
+      await expect(img).toHaveAttribute("src", new RegExp(`^visuals/${p.id}\\.(svg|png|gif)$`));
+      await expect(img).toHaveAttribute("alt", p.visual_alt as string);
+      await expect(img).toHaveAttribute("loading", "lazy");
+      for (const side of ["width", "height"]) expect(Number(await img.getAttribute(side)), `${p.id} ${side}`).toBeGreaterThan(0);
+      if (p.visual_caption) await expect(page.locator(`#${p.id} figcaption`)).toHaveText(p.visual_caption);
+      await img.scrollIntoViewIfNeeded();
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0), { message: p.id }).toBe(true);
+    }
+  });
+
+  test("each holds its space before its file arrives, so nothing shifts when it does", async ({ page }) => {
+    await page.route("**/visuals/**", () => {});
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    for (const p of shown) {
+      const img = page.locator(`#${p.id} img.visual`);
+      const [w, h] = [Number(await img.getAttribute("width")), Number(await img.getAttribute("height"))];
+      const box = await img.boundingBox();
+      expect(box?.width, p.id).toBeGreaterThan(200);
+      expect(Math.abs((box?.height ?? 0) - ((box?.width ?? 0) * h) / w), p.id).toBeLessThan(3);
+    }
+  });
+
+  test("they rise into place as they scroll into view, where the browser can tie that to scrolling", async ({ page }) => {
+    await page.goto("/");
+    test.skip(!(await page.evaluate(() => CSS.supports("animation-timeline: view()"))), "no scroll-driven animations here");
+    expect(await page.locator("img.visual").first().evaluate((i) => getComputedStyle(i).animationName)).toBe("rise");
+  });
+
+  test.describe("with reduced motion", () => {
+    test.use({ reducedMotion: "reduce" });
+
+    test("nothing moves: a GIF shows its first frame, and no visual animates", async ({ page }) => {
+      await page.goto("/");
+      for (const p of shown) {
+        const img = page.locator(`#${p.id} img.visual`);
+        await img.scrollIntoViewIfNeeded();
+        const src = () => img.evaluate((i: HTMLImageElement) => i.currentSrc);
+        await expect.poll(src).not.toBe("");
+        if (p.urls.visual?.endsWith(".gif")) expect(await src()).toMatch(/-still\.gif$/);
+        expect(await img.evaluate((i) => getComputedStyle(i).animationName), p.id).toBe("none");
+      }
+    });
+  });
+});
+
 test("with JavaScript, the optional 3D mode is offered", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#power")).toBeVisible();
