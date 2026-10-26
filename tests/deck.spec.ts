@@ -180,7 +180,7 @@ test.describe("on a phone", () => {
   });
 });
 
-test("a project's visual shows in the panel and rises in as it opens", async ({ page }) => {
+test("a project's visual shows in the panel, rises in as it opens, and plays there", async ({ page }) => {
   const p = data.projects.find((x) => x.urls.visual?.endsWith(".gif")) as Portfolio["projects"][number];
   await powerOn(page);
   await rail(page, p.id).focus();
@@ -189,6 +189,11 @@ test("a project's visual shows in the panel and rises in as it opens", async ({ 
   await expect(img).toBeVisible();
   await expect(img).toHaveAttribute("alt", p.visual_alt as string);
   expect(await img.evaluate((i) => getComputedStyle(i).animationName)).toBe("panel-rise");
+  await expect(img).toHaveCSS("opacity", "1");
+  await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+  await page.locator("#panel button.play").click();
+  await expect(img).toHaveAttribute("src", `visuals/${p.id}.gif`);
+  await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
 });
 
 test.describe("with reduced motion, the panel", () => {
@@ -201,7 +206,8 @@ test.describe("with reduced motion, the panel", () => {
     await page.keyboard.press("Enter");
     const img = page.locator("#panel img.visual");
     await expect(img).toBeVisible();
-    await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.currentSrc)).toMatch(/-still\.gif$/);
+    await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+    await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
     expect(await img.evaluate((i) => getComputedStyle(i).animationName)).toBe("none");
   });
 });

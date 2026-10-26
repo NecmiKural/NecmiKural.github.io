@@ -97,20 +97,27 @@ export function svgSize(svg: string, where: string): { width: number; height: nu
 // viewBox of an SVG (which must hold no script).
 export function imageSize(bytes: Uint8Array, where: string): { kind: "svg" | "png" | "gif"; width: number; height: number } {
   const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  const sized = (kind: "svg" | "png" | "gif", width: number, height: number) => {
+    if (!(width > 0 && height > 0)) throw new Error(`${where}: no size in the ${kind} header`);
+    return { kind, width, height };
+  };
   if (bytes[0] === 0x89 && ascii(1, 4) === "PNG") {
+    if (bytes.length < 24) throw new Error(`${where}: truncated PNG`);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    return { kind: "png", width: view.getUint32(16), height: view.getUint32(20) };
+    return sized("png", view.getUint32(16), view.getUint32(20));
   }
-  if (ascii(0, 4) === "GIF8") return { kind: "gif", width: bytes[6] | (bytes[7] << 8), height: bytes[8] | (bytes[9] << 8) };
-  return { kind: "svg", ...svgSize(new TextDecoder().decode(bytes), where) };
+  if (ascii(0, 4) === "GIF8") return sized("gif", bytes[6] | (bytes[7] << 8), bytes[8] | (bytes[9] << 8));
+  const { width, height } = svgSize(new TextDecoder().decode(bytes), where);
+  return sized("svg", width, height);
 }
 
 // The first frame of a GIF, as a GIF of its own: everything up to the end of the first image,
-// then the trailer. Served instead of the moving image to visitors who ask for less motion.
+// then the trailer. Shown until the visitor plays the moving image.
 export function firstFrame(gif: Uint8Array, where: string): Uint8Array {
   const table = (packed: number) => (packed & 0x80 ? 3 * 2 ** ((packed & 7) + 1) : 0);
   const blocks = (at: number) => {
-    while (gif[at] !== 0) at += gif[at] + 1; // data sub-blocks, up to the empty one
+    while (at < gif.length && gif[at] !== 0) at += gif[at] + 1; // data sub-blocks, up to the empty one
+    if (at >= gif.length) throw new Error(`${where}: truncated GIF`);
     return at + 1;
   };
   let at = 13 + table(gif[10]);
@@ -118,7 +125,10 @@ export function firstFrame(gif: Uint8Array, where: string): Uint8Array {
     if (gif[at] === 0x21) at = blocks(at + 2); // an extension: label, then its sub-blocks
     else if (gif[at] === 0x2c) {
       at = blocks(at + 10 + table(gif[at + 9]) + 1); // descriptor, colour table, LZW size, data
-      return Uint8Array.of(...gif.subarray(0, at), 0x3b);
+      const still = new Uint8Array(at + 1);
+      still.set(gif.subarray(0, at));
+      still[at] = 0x3b;
+      return still;
     } else break;
   }
   throw new Error(`${where}: no image in the GIF`);
@@ -156,15 +166,14 @@ function article(p: Project, sizes: Sizes): string {
   let visual = "";
   if (p.urls.visual) {
     const v = need(sizes[p.id], `${where} visual size`);
+    // A moving image shows its first frame until the visitor plays it: src/main.ts reveals the
+    // button, which swaps src and data-play. Without JavaScript the first frame stays.
     const img =
-      `<img class="visual" src="visuals/${v.file}" alt="${esc(need(p.visual_alt, `${where}.visual_alt`))}"` +
-      ` width="${v.width}" height="${v.height}" loading="lazy" decoding="async">`;
-    // A moving image holds still for visitors who ask for less motion.
-    const media = v.still
-      ? `<picture><source media="(prefers-reduced-motion: reduce)" srcset="visuals/${v.still}">${img}</picture>`
-      : img;
+      `<img class="visual" src="visuals/${v.still ?? v.file}"${v.still ? ` data-play="visuals/${v.file}"` : ""}` +
+      ` alt="${esc(need(p.visual_alt, `${where}.visual_alt`))}" width="${v.width}" height="${v.height}" loading="lazy" decoding="async">`;
+    const play = v.still ? `<button class="play" type="button" hidden>Play the demo<span class="vh"> of ${esc(p.title)}</span></button>` : "";
     const caption = p.visual_caption ? `<figcaption>${esc(p.visual_caption)}</figcaption>` : "";
-    visual = `<figure class="figure">${media}${caption}</figure>`;
+    visual = `<figure class="figure">${img}${play}${caption}</figure>`;
   }
   const row = linkRow(p);
   return [

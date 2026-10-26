@@ -8,7 +8,7 @@ Source of https://necmikural.github.io: one static HTML page that works with Jav
 
 Do not edit the copies. Change the TOML in that repo, run its build, push, then run `npm run sync-content` here and commit. CI compares the copies byte for byte with that repo's `main` on every push and every Monday, and fails if they differ.
 
-Project visuals (the flagship demos, crossfade's demo GIF, figures from the coursework repos) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF also gets a still of its first frame, shown to visitors who ask for less motion; on the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens, and neither moves with reduced motion.
+Project visuals (the flagship demos, crossfade's demo GIF, figures from the coursework repos) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF shows a still of its first frame, cut at build time, until the visitor presses its Play button (without JavaScript the still stays). On the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens; neither moves with reduced motion or in print.
 
 ## Commands
 

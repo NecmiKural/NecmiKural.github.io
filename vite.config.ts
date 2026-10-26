@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { defineConfig, type Plugin } from "vite";
 import { firstFrame, imageSize, renderPage, type Portfolio, type Sizes } from "./scripts/render.ts";
 
@@ -12,16 +12,17 @@ function portfolio(): Plugin {
     name: "portfolio",
     async buildStart() {
       data = JSON.parse(await readFile("content/portfolio.json", "utf8"));
+      await rm("public/visuals", { recursive: true, force: true }); // no file left from an earlier build
       await mkdir("public/visuals", { recursive: true });
       const fetched = await Promise.all(
         data.projects
           .filter((p) => p.urls.visual)
           .map(async (p) => {
             const url = p.urls.visual as string;
-            if (!url.startsWith("https://raw.githubusercontent.com/NecmiKural/")) {
-              throw new Error(`${p.id}: visual is not from a NecmiKural repo: ${url}`);
+            if (!/^https:\/\/raw\.githubusercontent\.com\/NecmiKural\/[\w.-]+\/[0-9a-f]{40}\/[\w./-]+\.(svg|png|gif)$/.test(url) || url.includes("..")) {
+              throw new Error(`${p.id}: visual is not a file in a NecmiKural repo at a pinned commit: ${url}`);
             }
-            const res = await fetch(url);
+            const res = await fetch(url, { redirect: "error" });
             if (!res.ok) throw new Error(`${p.id}: ${url} returned ${res.status}`);
             const bytes = new Uint8Array(await res.arrayBuffer());
             const { kind, width, height } = imageSize(bytes, url);
