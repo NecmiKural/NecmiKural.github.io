@@ -1,76 +1,43 @@
-// Lab, the default scene: a chemistry lab drawn like an 80s pixel-art game. Each project is a
-// sample flask on the shelves, one shelf per group. Choosing one takes it to the bench under a
-// burette: three drops, the liquid turns at the endpoint, and the CRT terminal prints the assay.
-// A titration ends at a measured endpoint, the way the projects' numbers come from runs that can
-// be replayed. The scene renders 320 pixels across and is scaled up without smoothing; the HUD
-// shows only real data, in the site's 5x7 dot-matrix font. Procedural geometry and canvas
-// textures only.
+// Lab, the default scene: a dense chemistry lab at night, drawn like an 80s pixel-art game. Each
+// project is a sample flask on the shelves, one shelf per group. Choosing one takes it to the
+// distillation rig: its liquid runs through the tubing into the boiling flask, through the
+// condenser, and drips into the receiver; then the CRT prints the assay. A distillation ends in
+// a measured product, the way the projects' numbers come from runs that can be replayed.
+//
+// The picture is a 2D canvas drawn in code (lab/art.ts) at a low resolution, shown 1:1 on a
+// plane facing an orthographic camera and scaled up by the browser without smoothing. Invisible
+// planes over the flasks carry the project ids for pointer picking. The room moves a little all
+// the time (neon, flame, screens, steam) at a low frame rate; the engine stops that in a hidden
+// tab, with low power, and entirely with reduced motion. The HUD shows real data only.
 
 import {
-  BoxGeometry,
   CanvasTexture,
-  CatmullRomCurve3,
-  Color,
-  CylinderGeometry,
-  DirectionalLight,
-  EdgesGeometry,
-  Group,
-  HemisphereLight,
-  LatheGeometry,
-  LineBasicMaterial,
-  LineSegments,
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
-  PerspectiveCamera,
+  OrthographicCamera,
   PlaneGeometry,
-  RepeatWrapping,
   Scene as World,
-  SphereGeometry,
   SRGBColorSpace,
-  Vector2,
-  Vector3,
-  type MeshToonMaterial,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { ADVANCE, drawText } from "../engine/font.ts";
-import { disposeAll, drawnBox, fit, GROUP_COLOURS, slides, toonMaker } from "../engine/kit.ts";
+import { pixelGrid } from "../engine/kit.ts";
 import { easeInOut, linear } from "../engine/loop.ts";
 import type { Motif } from "../engine/sound.ts";
 import type { CreateScene, Project } from "../engine/types.ts";
+import * as art from "./lab/art.ts";
 
-const PIXELS = 320; // render width; everything is drawn on this grid
-// A small palette: CRT green, amber, wood, and a little neon.
-const GREEN = "#39ff6a";
-const GREEN_DIM = "#145c2a";
-const AMBER = "#ffb000";
-const NEON = "#ff4fd8";
-const NEON_CYAN = "#3ee8ff";
-const WOOD = "#8a5a33";
-const WORKTOP = "#3a2b20";
-const WALL = "#1d2433";
-const GLASS = "#b9e4ef";
-const HOUSING = "#cbb994";
-const SCREEN = "#06100a";
 // The profile banner's accent (scripts/portfolio.py in NecmiKural/NecmiKural): the flagship
-// samples take the one for the visitor's colour scheme. The room is dark in both, so lettering and
-// the cursor take the lighter one, which reads on it.
+// samples take the one for the visitor's colour scheme. The room is dark in both, so lettering,
+// the HUD frame and the glow take the lighter one, which reads on it.
 const ACCENTS = { light: "#c2410c", dark: "#fb923c" };
-const BAR = 21; // HUD bar height, top and bottom, in pixels
-// The assay's last state: the titration ran to its endpoint. No pass or fail is claimed.
-const DONE = "ASSAY: DONE";
-const VIEW = new Vector3(0.12, 0.3, 1).normalize(); // almost straight on, a little from above
-
-// World units. The back wall is at z = -2; the bench runs along it.
-const BENCH = { w: 9, h: 0.9, d: 1.2, z: -1.3 };
-const TOP = BENCH.h + 0.08; // the worktop surface
-const SHELF = { x: -2.4, z: -1.78, pitch: 0.55, row: 0.72, low: 1.75 };
-const FLASK_H = 0.36;
-const STAND = new Vector3(0.45, TOP, -1.2); // where a sample is assayed, under the burette
-const TIP_Y = TOP + FLASK_H + 0.24;
-const CRT = { x: 1.95, z: -1.35 };
+const LETTERING = ACCENTS.dark;
+const RUNNING = "ASSAY RUNNING";
+const DONE = "ASSAY DONE"; // the run reached its end; no pass or fail is claimed
+const FPS = 12; // the room's ambient animation
+const IDLE_LIQUID = "#9d4dff"; // what the boiling flask holds between assays
 
 const LIFT: Motif = [{ hz: 330, to: 660, dur: 0.06, vol: 0.08 }];
+const POUR: Motif = [{ noise: 1800, dur: 0.18, vol: 0.04 }];
 const DRIP: Motif = [{ wave: "triangle", hz: 1320, to: 990, dur: 0.04, vol: 0.1 }];
 const ENDPOINT: Motif = [
   { hz: 587, dur: 0.06, vol: 0.08 },
@@ -78,433 +45,279 @@ const ENDPOINT: Motif = [
   { hz: 659, at: 0.16, dur: 0.06, vol: 0.08 },
   { hz: 880, at: 0.24, dur: 0.1, vol: 0.08 },
 ];
-const TYPING: Motif = [0, 0.04, 0.08, 0.12, 0.16, 0.2].map((at) => ({ noise: 4000, at, dur: 0.01, vol: 0.05 }));
 const PUT_BACK: Motif = [{ hz: 660, to: 330, dur: 0.08, vol: 0.08 }];
 
-// An Erlenmeyer flask, turned on a lathe: liquid in the bottom, pale glass above it.
-const LIQUID = [
-  [0, 0],
-  [0.16, 0],
-  [0.165, 0.02],
-  [0.12, 0.13],
-  [0, 0.13],
-].map(([x, y]) => new Vector2(x, y));
-const FLASK = [
-  [0.12, 0.13],
-  [0.06, 0.25],
-  [0.05, 0.27],
-  [0.05, 0.34],
-  [0.065, FLASK_H],
-  [0, FLASK_H],
-].map(([x, y]) => new Vector2(x, y));
-
-// A canvas texture drawn on the pixel grid: no smoothing, no mipmaps.
-function pixelCanvas(w: number, h: number) {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const g = canvas.getContext("2d") as CanvasRenderingContext2D;
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  texture.magFilter = texture.minFilter = NearestFilter;
-  texture.generateMipmaps = false;
-  return { canvas, g, texture };
-}
+type Point = { x: number; y: number };
 
 export const create: CreateScene = (stage) => {
   const world = new World();
-  world.background = new Color(WALL);
-  const camera = new PerspectiveCamera(25, 1, 1, 100);
-  world.add(camera); // so the HUD, a child of the camera, is drawn
-  world.add(new HemisphereLight("#cfe8ff", "#2a1d14", 1.4));
-  const sun = new DirectionalLight("#fff2dc", 2.4);
-  sun.position.set(-3, 7, 6);
-  world.add(sun);
-
-  const { toon, bands } = toonMaker();
-  const flat = (colour: string) => new MeshBasicMaterial({ color: colour });
+  // Looking down -z at the picture (z = 0) and the pick planes over it (z = 1); its rays start
+  // halfway between near and far, so it stands back at z = 5.
+  const camera = new OrthographicCamera(0, 1, 0, -1, -10, 10);
+  camera.position.z = 5;
   const accent = matchMedia("(prefers-color-scheme: dark)").matches ? ACCENTS.dark : ACCENTS.light;
-  const lettering = ACCENTS.dark;
-  const groupColour = (group: string) => (group === "flagship" ? accent : (GROUP_COLOURS[group] ?? AMBER));
-  const textures: { dispose(): void }[] = [bands];
+  const liquidOf = (group: string) => (group === "flagship" ? accent : (art.LIQUIDS[group] ?? art.PAL.amber));
 
-  // The room: tiled floor, back wall with a dot-matrix sign, a long bench with a dark worktop.
-  const floorTiles = pixelCanvas(2, 2);
-  floorTiles.g.fillStyle = "#232733";
-  floorTiles.g.fillRect(0, 0, 2, 2);
-  floorTiles.g.fillStyle = "#2c3140";
-  floorTiles.g.fillRect(0, 0, 1, 1);
-  floorTiles.g.fillRect(1, 1, 1, 1);
-  floorTiles.texture.wrapS = floorTiles.texture.wrapT = RepeatWrapping;
-  floorTiles.texture.repeat.set(16, 8);
-  textures.push(floorTiles.texture);
-  const floor = new Mesh(new PlaneGeometry(16, 8).rotateX(-Math.PI / 2), new MeshBasicMaterial({ map: floorTiles.texture }));
-  floor.position.z = 1.5;
-  const wall = new Mesh(new PlaneGeometry(16, 7), flat(WALL));
-  wall.position.set(0, 3.5, -2);
-  world.add(floor, wall);
+  // The picture: one canvas, redrawn before each frame, on a plane that fills the view.
+  const canvas = document.createElement("canvas");
+  const g = canvas.getContext("2d") as CanvasRenderingContext2D;
+  const room = document.createElement("canvas"); // the still parts, painted once per size
+  let veil = art.overlay(1, 1);
+  const material = new MeshBasicMaterial();
+  const surface = new Mesh(new PlaneGeometry(1, 1), material);
+  world.add(surface);
+  let texture: CanvasTexture | null = null;
 
-  // The sign, lettered like the banner: its 5 x 7 dots, lit over faint unlit ones. One texel a dot:
-  // gaps between dots would be finer than the 320-pixel grid and break up.
-  const sign = pixelCanvas(19, 9);
-  drawText(sign.g, "LAB", 1, 1, 1, lettering, `${lettering}30`);
-  textures.push(sign.texture);
-  const plate = new Mesh(new PlaneGeometry(2.1, 1), new MeshBasicMaterial({ map: sign.texture, transparent: true }));
-  plate.position.set(0.55, 4.25, -1.98);
-  world.add(plate);
-
-  const room = new Group(); // what the camera frames, apart from the fume hood
-  world.add(room);
-  room.add(
-    new Mesh(new BoxGeometry(BENCH.w, BENCH.h, BENCH.d).translate(0, BENCH.h / 2, BENCH.z), toon(WOOD)),
-    new Mesh(new BoxGeometry(BENCH.w + 0.1, 0.08, BENCH.d + 0.05).translate(0, BENCH.h + 0.04, BENCH.z), toon(WORKTOP)),
-  );
-
-  // The burette on its stand, with a white tile where the sample stands.
-  const glass = flat(GLASS);
-  const steel = toon("#9aa3ad");
-  room.add(
-    new Mesh(
-      mergeGeometries([
-        new BoxGeometry(0.7, 0.05, 0.45).translate(STAND.x + 0.15, TOP + 0.025, STAND.z),
-        new CylinderGeometry(0.025, 0.025, 1.9, 8).translate(STAND.x + 0.42, TOP + 0.95, STAND.z - 0.12),
-        new BoxGeometry(0.42, 0.05, 0.05).translate(STAND.x + 0.21, TIP_Y + 0.75, STAND.z - 0.06),
-      ]),
-      steel,
-    ),
-    new Mesh(new BoxGeometry(0.4, 0.012, 0.4).translate(STAND.x, TOP + 0.056, STAND.z), flat("#e9eef2")),
-    new Mesh(new CylinderGeometry(0.045, 0.045, 1, 12).translate(STAND.x, TIP_Y + 0.62, STAND.z), glass),
-    new Mesh(new CylinderGeometry(0.035, 0.035, 0.55, 12).translate(STAND.x, TIP_Y + 0.84, STAND.z + 0.012), flat(NEON_CYAN)),
-    new Mesh(new CylinderGeometry(0.012, 0.035, 0.1, 8).translate(STAND.x, TIP_Y + 0.07, STAND.z), glass),
-  );
-  const drop = new Mesh(new SphereGeometry(0.03, 6, 4), flat(NEON_CYAN));
-  drop.visible = false;
-  room.add(drop);
-
-  // The CRT terminal: a beige housing, a green screen and a keyboard. Its screen is drawn at
-  // about the size it covers on the pixel grid, 6 characters by 3 lines, and shows text only.
-  const crt = pixelCanvas(36, 24);
-  textures.push(crt.texture);
-  let shown = "";
-  let screenLines: string[] = [];
-  let screenChars = Infinity;
-  let small = false; // the screen covers fewer pixels than its text needs: bars stand for the lines
-  const terminal = (lines: string[], chars = Infinity) => {
-    screenLines = lines;
-    screenChars = chars;
-    const key = `${lines.join("\n")}|${chars}|${small}`;
-    if (key === shown) return;
-    shown = key;
-    crt.g.fillStyle = SCREEN;
-    crt.g.fillRect(0, 0, 36, 24);
-    let left = chars;
-    lines.slice(0, 3).forEach((line, i) => {
-      const part = line.slice(0, Math.max(0, Math.min(6, left)));
-      left -= Math.min(6, line.length);
-      const colour = i === 0 ? AMBER : GREEN;
-      if (!small) drawText(crt.g, part, 0, i * 8, 1, colour);
-      else if (part) {
-        crt.g.fillStyle = colour;
-        crt.g.fillRect(0, i * 8 + 1, part.length * ADVANCE - 1, 5);
-      }
-    });
-    crt.texture.needsUpdate = true;
-    stage.invalidate();
-  };
-  room.add(
-    new Mesh(new BoxGeometry(1.75, 0.98, 0.8).translate(CRT.x, TOP + 0.52, CRT.z), toon(HOUSING)), // wide, no chin
-    new Mesh(new BoxGeometry(1.2, 0.06, 0.32).translate(CRT.x, TOP + 0.03, CRT.z + 0.7), toon("#a8996f")),
-  );
-  const screen = new Mesh(new PlaneGeometry(1.2, 0.8), new MeshBasicMaterial({ map: crt.texture }));
-  screen.position.set(CRT.x, TOP + 0.52, CRT.z + 0.402);
-  room.add(screen);
-
-  // The fume hood on the right: a steel cabinet, its glass sash drawn as edges, a neon strip light.
-  const hood = new Group();
-  world.add(hood);
-  hood.add(
-    new Mesh(
-      mergeGeometries([
-        new BoxGeometry(2, 0.12, 1.3).translate(0, 2.6, 0),
-        new BoxGeometry(0.1, 2.6, 1.3).translate(-0.95, 1.3, 0),
-        new BoxGeometry(0.1, 2.6, 1.3).translate(0.95, 1.3, 0),
-        new BoxGeometry(2, 2.6, 0.08).translate(0, 1.3, -0.62),
-        new BoxGeometry(2, TOP, 1.3).translate(0, TOP / 2, 0),
-      ]),
-      toon("#7b8794"),
-    ),
-    new LineSegments(new EdgesGeometry(new BoxGeometry(1.8, 1, 0.02).translate(0, 2.0, 0.6)), new LineBasicMaterial({ color: GLASS })),
-    new Mesh(new BoxGeometry(1.6, 0.05, 0.05).translate(0, 2.48, 0.3), flat(NEON)),
-    // Three vessels of different heights, so no pair reads as a pair of eyes in the sash's frame.
-    new Mesh(new CylinderGeometry(0.13, 0.12, 0.3, 10).translate(-0.4, TOP + 0.15, -0.1), glass),
-    new Mesh(new CylinderGeometry(0.1, 0.09, 0.22, 10).translate(0.3, TOP + 0.11, 0.1), glass),
-    new Mesh(new CylinderGeometry(0.05, 0.07, 0.62, 8).translate(0.62, TOP + 0.31, -0.3), glass), // a measuring cylinder
-  );
-  hood.position.set(4.1, 0, -1.3);
-
-  // The pixel HUD, on a plane in front of the camera, drawn at one texel per screen pixel.
-  let hud = pixelCanvas(PIXELS, 200);
-  const hudMaterial = new MeshBasicMaterial({ map: hud.texture, transparent: true, depthTest: false, depthWrite: false });
-  const hudPlane = new Mesh(new PlaneGeometry(1, 1), hudMaterial);
-  hudPlane.renderOrder = 10;
-  hudPlane.raycast = () => {};
-  camera.add(hudPlane);
-
-  // The pixel cursor over the chosen flask.
-  const arrow = pixelCanvas(7, 5);
-  arrow.g.fillStyle = lettering;
-  [7, 5, 3, 1].forEach((w, row) => arrow.g.fillRect((7 - w) / 2, row, w, 1));
-  textures.push(arrow.texture);
-  const cursor = new Mesh(new PlaneGeometry(0.14, 0.1), new MeshBasicMaterial({ map: arrow.texture, transparent: true }));
-  cursor.position.y = FLASK_H + 0.14;
-  cursor.raycast = () => {};
-  cursor.visible = false;
-  room.add(cursor);
-
-  const flasks = new Map<string, Group>();
-  const liquids = new Map<string, MeshToonMaterial>();
-  const homes = new Map<string, Vector3>();
+  const pickGeometry = new PlaneGeometry(art.FLASK_W + 4, art.FLASK_H + 4);
+  const hidden = new MeshBasicMaterial();
+  const picks = new Map<string, Mesh>();
+  const homes = new Map<string, Point>();
   const byId = new Map<string, Project>();
-  let total = 0;
+  const order: string[] = [];
+  let counts: number[] = [];
+  let plan = art.plan(art.MIN.width, art.MIN.height);
+  let path: [number, number][] = [];
+  let condenserFrom = 0; // where along the path the condenser starts
+
+  let projects = 0;
   let flagships = 0;
-  let aspect = 1;
   let focused: string | null = null;
   let playing: string | null = null;
   let status = "";
-  let moving: Group | null = null;
+  let flight = 0; // the playing flask's way from its shelf (0) to the rig (1)
+  let flow = 0; // 0..1 along the tubing
+  let drops = 0; // 0..3 drops fallen, fractional while one falls
+  let screen: string[] | null = null;
+  let typed = 0;
+  let start = 0;
+  let t = 0; // ms of ambient time; still under reduced motion
+  let said = "";
 
-  const slide = slides(stage, (id, amount) => {
-    const flask = flasks.get(id) as Group;
-    if (flask.parent !== room || flask === moving || id === playing) return;
-    flask.position.y = (homes.get(id) as Vector3).y + 0.06 * amount; // a small hop
+  stage.ambient(FPS, (now) => {
+    start ||= now;
+    t = now - start;
   });
 
-  // Real data only: counts from the page, the chosen project's title and where its numbers come from.
-  const drawHud = () => {
-    const h = hud.canvas.height;
-    const g = hud.g;
-    g.clearRect(0, 0, PIXELS, h);
-    const box = (x: number, y: number, w: number, bh: number) => {
-      g.fillStyle = "rgba(6, 10, 8, 0.82)";
-      g.fillRect(x, y, w, bh);
-      g.fillStyle = GREEN_DIM;
-      g.fillRect(x, y, w, 1);
-      g.fillRect(x, y + bh - 1, w, 1);
+  const home = (id: string) => homes.get(id) ?? { x: 0, y: 0 };
+  const sampleAt = (): Point => ({ x: plan.sample.x, y: plan.sample.y - art.FLASK_H });
+  const placePick = (id: string, p: Point) => picks.get(id)?.position.set(p.x + art.FLASK_W / 2, -(p.y + art.FLASK_H / 2), 1);
+  // Where a flask is: on its shelf, or along an arc over the bench to the rig. Worked out from the
+  // current layout every time, so a resize mid-flight lands it in the right place.
+  const flaskAt = (id: string): Point => {
+    const from = home(id);
+    if (id !== playing || flight === 0) return from;
+    const to = sampleAt();
+    const lift = Math.min(from.y, to.y) - 20;
+    const k = flight;
+    const u = 1 - k;
+    return {
+      x: Math.round(u * u * from.x + 2 * u * k * ((from.x + to.x) / 2) + k * k * to.x),
+      y: Math.round(u * u * from.y + 2 * u * k * lift + k * k * to.y),
     };
-    const lines: string[] = [];
-    const line = (text: string, x: number, y: number, colour: string) => {
-      drawText(g, text, x, y, 1, colour);
-      lines.push(text);
-    };
-    const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "S"}`;
-    box(0, 0, PIXELS, BAR);
-    line(`INVENTORY: ${count(total, "PROJECT")}`, 4, 3, GREEN);
-    line(`SAMPLES: ${count(flagships, "FLAGSHIP")}`, 4, 12, lettering); // the flagship samples' colour
-    const lab = "LAB: OPEN";
-    line(lab, PIXELS - 4 - lab.length * ADVANCE, 3, AMBER);
-    const shownId = playing ?? focused; // the sample on the bench, else the one pointed at
-    const p = shownId ? byId.get(shownId) : undefined;
-    if (p) {
-      box(0, h - BAR, PIXELS, BAR);
-      const width = Math.floor((PIXELS - 8) / ADVANCE);
-      line(p.title.toUpperCase().slice(0, width), 4, h - 18, GREEN);
-      const group = p.group.toUpperCase().replace("-", " ");
-      line((p.ref ? `${group}  REF ${p.ref}` : group).slice(0, 30), 4, h - 9, GREEN);
-      if (status) line(status, PIXELS - 4 - status.length * ADVANCE, h - 9, status === DONE ? GREEN : AMBER);
-    }
-    hud.texture.needsUpdate = true;
-    stage.caption(hudPlane.visible ? lines.join("\n") : "");
-    stage.invalidate();
   };
 
-  const liquidColour = (id: string) => new Color(groupColour(byId.get(id)?.group ?? ""));
-  const idleTerminal = () => terminal(["READY", String(total), "FLASKS"]);
+  const draw = () => {
+    if (!texture) return;
+    g.drawImage(room, 0, 0);
+    art.neon(g, plan, t);
+    art.windowLights(g, plan, t);
+    art.clock(g, plan, new Date(), t);
+    const shown = playing ?? focused;
+    // Flasks on the shelves, glowing; the one being assayed is drawn where it is.
+    order.forEach((id, i) => {
+      if (id === playing) return;
+      const p = home(id);
+      const liquid = liquidOf(byId.get(id)?.group ?? "");
+      art.flaskGlow(g, p.x, p.y, liquid);
+      art.flask(g, p.x, p.y, liquid, t, i);
+    });
+    if (focused && focused !== playing) {
+      const p = home(focused);
+      art.glow(g, p.x, p.y, LETTERING, Math.sin(t / 250));
+    }
+    const sample = playing ? liquidOf(byId.get(playing)?.group ?? "") : IDLE_LIQUID;
+    // The liquid in the tubing, then the rig over it.
+    const reached = Math.round(flow * path.length);
+    for (let k = 0; k < reached; k++) art.px(g, path[k][0], path[k][1], sample);
+    art.flame(g, plan.burner.x, plan.bench.y - 13, t, playing !== null);
+    art.roundFlask(g, plan, reached > condenserFrom - 8 ? sample : IDLE_LIQUID, t);
+    art.coil(g, plan, Math.max(0, (reached - condenserFrom) / (path.length - condenserFrom)), sample);
+    const out = path[path.length - 1];
+    const falling = drops % 1;
+    if (falling > 0) art.px(g, out[0], out[1] + 1 + Math.round(falling * 8), sample);
+    const r = plan.receiver;
+    const level = Math.min(3, Math.floor(drops));
+    if (level) art.rect(g, r.x + 1, r.y - 1 - level, art.FLASK_W - 2, level, sample);
+    art.steam(g, plan.round.x, plan.round.y - plan.round.r - 9, t, playing ? 6 : 3, 1);
+    art.steam(g, r.x + 5, r.y - art.FLASK_H - 1, t, 2, 2);
+    art.steam(g, plan.x0 + 278, plan.bench.y - 8, t, 2, 3); // the mug
+    art.sparks(g, plan.x0 + 150, plan.top + 12, t);
+    art.scopeTrace(g, plan, t);
+    let left = typed; // characters typed so far, line by line
+    art.crtScreen(
+      g,
+      plan,
+      t,
+      screen?.map((s) => {
+        const part = s.slice(0, Math.max(0, left));
+        left -= s.length;
+        return part;
+      }) ?? null,
+    );
+    art.screenGlow(g, plan);
+    art.cat(g, plan, t);
+    if (playing) {
+      const p = flaskAt(playing);
+      art.flask(g, p.x, p.y, sample, t, 99);
+      placePick(playing, p);
+    }
+    art.lampLight(g, plan);
+    const p = shown ? byId.get(shown) : undefined;
+    const version = p?.tag ? p.tag.toUpperCase() : p?.ref ? `REF ${p.ref.toUpperCase()}` : "";
+    const lines = art.hud(g, plan, {
+      projects,
+      flagships,
+      title: p?.title ?? "",
+      detail: p ? [p.group.toUpperCase().replace("-", " "), version].filter(Boolean).join("  ") : "",
+      status: shown === playing ? status : "",
+      accent: LETTERING,
+    });
+    g.drawImage(veil, 0, 0);
+    texture.needsUpdate = true;
+    const text = lines.join("\n");
+    if (text !== said) stage.caption((said = text));
+  };
+  world.onBeforeRender = draw;
 
   return {
     world,
     camera,
-    pixelWidth: PIXELS,
+    pixels: art.MIN,
 
-    build(projects) {
+    build(list) {
       byId.clear();
-      projects.forEach((p) => byId.set(p.id, p));
-      total = projects.length;
-      flagships = projects.filter((p) => p.group === "flagship").length;
-      const groups = [...new Set(projects.map((p) => p.group))];
-      const rows = groups.map((g) => projects.filter((p) => p.group === g));
-      const cols = Math.max(...rows.map((r) => r.length));
-      const width = cols * SHELF.pitch + 0.3;
-      const shelfY = (row: number) => SHELF.low + (groups.length - 1 - row) * SHELF.row;
-
-      // Shelves on the wall, one per group; the HUD names the group of the chosen sample (labels this
-      // small would not survive the pixel grid).
-      room.add(
-        new Mesh(
-          mergeGeometries(groups.map((_, row) => new BoxGeometry(width, 0.06, 0.4).translate(SHELF.x, shelfY(row) - 0.03, SHELF.z))),
-          toon(WOOD),
-        ),
-      );
-      // The flasks: liquid in the group colour, a pale glass top, and a box for the pointer.
-      const liquidGeometry = new LatheGeometry(LIQUID, 10);
-      const flaskGeometry = new LatheGeometry(FLASK, 10);
-      const target = new BoxGeometry(0.42, 0.5, 0.42).translate(0, 0.25, 0);
-      const hidden = new MeshBasicMaterial();
-      projects.forEach((p) => {
-        const row = groups.indexOf(p.group);
-        const col = rows[row].indexOf(p);
-        const flask = new Group();
-        flask.userData.id = p.id;
-        const liquid = toon(groupColour(p.group));
-        liquids.set(p.id, liquid);
-        const pick = new Mesh(target, hidden);
+      order.length = 0;
+      for (const p of list) {
+        byId.set(p.id, p);
+        order.push(p.id);
+        const pick = new Mesh(pickGeometry, hidden);
         pick.visible = false;
-        flask.add(new Mesh(liquidGeometry, liquid), new Mesh(flaskGeometry, glass), pick);
-        const home = new Vector3(SHELF.x - width / 2 + 0.15 + SHELF.pitch / 2 + col * SHELF.pitch, shelfY(row), SHELF.z);
-        flask.position.copy(home);
-        homes.set(p.id, home);
-        flasks.set(p.id, flask);
-        room.add(flask);
-      });
-      idleTerminal();
-      drawHud();
+        pick.userData.id = p.id;
+        picks.set(p.id, pick);
+        world.add(pick);
+      }
+      projects = list.length;
+      flagships = list.filter((p) => p.group === "flagship").length;
+      const groups = [...new Set(list.map((p) => p.group))];
+      // Lowest shelf first: the first group (the flagships) goes on the top shelf.
+      counts = groups.map((_, row) => list.filter((p) => p.group === groups[groups.length - 1 - row]).length);
+      for (const p of list) homes.set(p.id, { x: 0, y: 0 });
+      stage.invalidate();
     },
 
-    layout(next) {
-      aspect = next;
-      // The HUD texture matches the render target, PIXELS wide, so each dot is one screen pixel. In a
-      // very short window the bars would leave no room for the scene, so there is no HUD.
-      const h = Math.max(1, Math.round(PIXELS / aspect));
-      hudPlane.visible = h >= 100;
-      if (hud.canvas.height !== h) {
+    layout(aspect) {
+      const grid = pixelGrid(art.MIN, aspect);
+      if (canvas.width !== grid.width || canvas.height !== grid.height || !texture) {
+        canvas.width = room.width = grid.width;
+        canvas.height = room.height = grid.height;
         // A new texture: an uploaded one cannot change size in place.
-        hud.texture.dispose();
-        hud = pixelCanvas(PIXELS, h);
-        hudMaterial.map = hud.texture;
-        hudMaterial.needsUpdate = true;
+        texture?.dispose();
+        texture = new CanvasTexture(canvas);
+        texture.colorSpace = SRGBColorSpace;
+        texture.magFilter = texture.minFilter = NearestFilter;
+        texture.generateMipmaps = false;
+        material.map = texture;
+        material.needsUpdate = true;
+        plan = art.plan(grid.width, grid.height);
+        art.paintRoom(room.getContext("2d") as CanvasRenderingContext2D, plan, counts);
+        veil = art.overlay(grid.width, grid.height);
+        path = art.trace(art.tubing(plan));
+        condenserFrom = path.findIndex(([x, y]) => x === plan.condenser.x0 && y === plan.condenser.y0);
       }
-      world.updateMatrixWorld();
-      // Wide views take in the fume hood; narrow ones frame the shelves, burette and terminal. The
-      // cursor is left out, so the framing does not depend on what is pointed at.
-      const pointed = cursor.visible;
-      cursor.visible = false;
-      const boxes = [drawnBox(room), drawnBox(plate)];
-      cursor.visible = pointed;
-      if (aspect >= 1.25) boxes.push(drawnBox(hood));
-      // Framed in the band between the HUD bars: the same width, a shorter height.
-      const band = hudPlane.visible ? (h - 2 * BAR) / h : 1;
-      const fov = camera.fov;
-      camera.fov = (Math.atan(Math.tan((fov * Math.PI) / 360) * band) * 360) / Math.PI;
-      fit(camera, boxes, aspect / band, VIEW);
-      camera.fov = fov;
-      camera.aspect = aspect;
+      // Homes on the shelves, in page order within each group.
+      const groups = [...new Set(order.map((id) => byId.get(id)?.group ?? ""))];
+      groups.forEach((group, gi) => {
+        const row = groups.length - 1 - gi;
+        const on = order.filter((id) => byId.get(id)?.group === group);
+        const pitch = art.shelfPitch(on.length);
+        on.forEach((id, col) => {
+          homes.set(id, { x: plan.x0 + 10 + col * pitch, y: plan.shelf(row) - art.FLASK_H });
+          // Pick planes as wide as the flask's share of the shelf, so neighbours never overlap.
+          picks.get(id)?.scale.set(Math.min(art.FLASK_W + 4, pitch) / (art.FLASK_W + 4), 1, 1);
+        });
+      });
+      for (const id of order) placePick(id, flaskAt(id));
+      camera.right = grid.width;
+      camera.bottom = -grid.height;
       camera.updateProjectionMatrix();
-      const distance = camera.near * 1.5;
-      const height = 2 * distance * Math.tan((camera.fov * Math.PI) / 360);
-      hudPlane.scale.set(height * aspect, height, 1);
-      hudPlane.position.set(0, 0, -distance);
-      // How many pixels the terminal's screen covers decides between text and bars.
-      const edge = (x: number) => new Vector3(x, screen.position.y, screen.position.z).project(camera).x;
-      small = ((edge(CRT.x + 0.6) - edge(CRT.x - 0.6)) / 2) * PIXELS < 36;
-      terminal(screenLines, screenChars);
-      drawHud();
+      surface.scale.set(grid.width, grid.height, 1);
+      surface.position.set(grid.width / 2, -grid.height / 2, 0);
+      world.updateMatrixWorld(); // picking can run before the first frame
+      stage.invalidate();
     },
 
     focus(id) {
       if (id === focused) return;
-      if (focused) slide.pull(focused, 0);
       focused = id;
-      const flask = id ? flasks.get(id) : undefined;
-      if (id && flask && id !== playing) {
-        slide.pull(id, 1);
-        flask.add(cursor);
-      }
-      cursor.visible = !!flask && id !== playing;
-      if (!playing) status = "";
-      drawHud();
+      stage.invalidate();
     },
 
     async insert(id) {
-      const flask = flasks.get(id);
       const p = byId.get(id);
-      const liquid = liquids.get(id);
-      if (!flask || !p || !liquid) return;
+      if (!p) return;
       playing = id;
-      cursor.visible = false;
-      status = "ASSAY: RUNNING";
-      drawHud();
+      status = RUNNING;
       stage.play(LIFT);
-      const start = flask.position.clone();
-      moving = flask;
-      const path = new CatmullRomCurve3([
-        start,
-        start.clone().add(new Vector3(0, 0.25, 0.5)),
-        new Vector3(STAND.x - 0.2, TIP_Y + 0.3, STAND.z + 0.5),
-        STAND.clone(),
-      ]);
-      await stage.tween(450, (t) => flask.position.copy(path.getPointAt(t)), easeInOut);
-      moving = null;
-      // Three drops, and the liquid turns at the endpoint.
-      const from = liquidColour(id);
-      const to = new Color(NEON);
+      await stage.tween(450, (k) => (flight = k), easeInOut); // to the rig, in an arc over the bench
+      // Through the tubing, the boiling flask and the condenser.
+      stage.play(POUR);
+      await stage.tween(500, (k) => (flow = k), linear);
+      // Three drops into the receiver.
       for (let k = 0; k < 3; k++) {
         stage.play(DRIP);
-        drop.visible = true;
-        await stage.tween(
-          110,
-          (t) => {
-            drop.position.set(STAND.x, TIP_Y - (TIP_Y - (TOP + FLASK_H - 0.02)) * t, STAND.z);
-            liquid.color.copy(from).lerp(to, (k + t) / 3);
-          },
-          linear,
-        );
+        await stage.tween(110, (u) => (drops = k + Math.min(u, 0.999)), linear);
+        drops = k + 1;
       }
-      drop.visible = false;
+      // The CRT prints the assay.
       stage.play(ENDPOINT);
-      // The terminal types the assay.
-      stage.play(TYPING);
-      const lines = ["ASSAY", (p.ref ?? "").slice(0, 6), "DONE"];
-      const chars = lines.join("").length;
-      await stage.tween(300, (t) => terminal(lines, Math.ceil(chars * t)), linear);
+      screen = ["ASSAY", (p.tag ?? p.ref ?? "").toUpperCase().slice(0, 7), "DONE"]; // 7 a line
+      const chars = screen.join("").length;
+      await stage.tween(300, (k) => (typed = Math.ceil(chars * k)), linear);
       status = DONE;
-      drawHud();
+      stage.invalidate();
     },
 
     async eject() {
       const id = playing;
-      const flask = id ? flasks.get(id) : undefined;
-      const liquid = id ? liquids.get(id) : undefined;
-      if (!id || !flask || !liquid) return;
+      if (!id) return;
       stage.play(PUT_BACK);
       status = "";
-      drawHud();
-      const home = homes.get(id) as Vector3;
-      const start = flask.position.clone();
-      const back = new CatmullRomCurve3([start, new Vector3(STAND.x - 0.2, TIP_Y + 0.3, STAND.z + 0.5), home.clone().add(new Vector3(0, 0.25, 0.5)), home.clone()]);
-      const from = liquid.color.clone();
-      const colour = liquidColour(id);
-      moving = flask;
+      const full = flow;
       await stage.tween(
         400,
-        (t) => {
-          flask.position.copy(back.getPointAt(t));
-          liquid.color.copy(from).lerp(colour, t);
+        (k) => {
+          flight = 1 - k; // back along the same arc
+          flow = full * (1 - k);
+          drops = 3 * (1 - k);
         },
         easeInOut,
       );
-      moving = null;
       playing = null;
-      slide.reset(id);
-      if (focused === id) {
-        slide.pull(id, 1);
-        flask.add(cursor);
-        cursor.visible = true;
-      }
-      idleTerminal();
-      drawHud();
+      flight = 0;
+      flow = 0;
+      drops = 0;
+      screen = null;
+      typed = 0;
+      placePick(id, home(id));
+      stage.invalidate();
     },
 
     dispose() {
-      disposeAll(world, [...textures, hud.texture]);
+      texture?.dispose();
+      material.dispose();
+      hidden.dispose();
+      surface.geometry.dispose();
+      pickGeometry.dispose();
     },
   };
 };

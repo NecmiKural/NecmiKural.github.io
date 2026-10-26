@@ -4,11 +4,11 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 
 ## Rules for every scene
 
-- Procedural geometry only: no model files, image textures or web fonts. Text is drawn on canvases in the site's own 5x7 bitmap font (`src/engine/font.ts`).
+- Procedural only: no model files, image files or web fonts. Geometry and canvas drawing are made in code; text is drawn on canvases in the site's own 5x7 bitmap font (`src/engine/font.ts`).
 - Sound: original motifs of at most 4 notes from Web Audio oscillators and noise, off until the visitor turns it on.
 - No recognisable product, character or franchise: no logos, brand label designs, faces or the button layout of a known device. The copy check bans the generic words that point that way; names to avoid live only in the `PRIVATE_TERMS` secret, never in this repo.
 - Every project is reachable from the rail of DOM buttons by keyboard, and the panel is a copy of the page's own article, so 3D mode shows exactly what the HTML page shows.
-- Budgets: 3D mode with one scene loads at most 200 KB of gzipped JavaScript (target 180 KB), and draws no frames while idle.
+- Budgets: 3D mode with one scene loads at most 200 KB of gzipped JavaScript (target 180 KB). A scene draws no frames while idle, unless it has an ambient animation (`Stage.ambient`, the Lab's): then at most about 12 frames a second, none in a hidden tab or with low power, and none at all with reduced motion.
 
 ## Engine (26 October 2026)
 
@@ -16,12 +16,12 @@ A dated record of the 3D scenes on necmikural.github.io and of the "who is this?
 
 - the full-screen dialog with the toolbar (scene switcher with `aria-pressed`, Sound, Low power, Power off) and the rail;
 - the project panel, a nested `<dialog>` whose heading takes focus;
-- rendering on demand (`src/engine/loop.ts`), reduced motion (every tween snaps), low power (pixel ratio 1, no outlines, no antialiasing at the next power on);
+- rendering on demand (`src/engine/loop.ts`), with an optional slow ambient tick that the engine pauses in a hidden tab and with low power, and that never runs with reduced motion; reduced motion (every tween snaps), low power (pixel ratio 1, no outlines, no antialiasing at the next power on, no ambient animation);
 - the sound engine (`src/engine/sound.ts`), the WebGL and context-loss fallbacks, and teardown.
 
 A scene implements `Scene` in `src/engine/types.ts` (`build`, `layout`, `focus`, `insert`, `eject`, `dispose`), lives in `src/scenes/<id>.ts` and is listed in `SCENES` in `boot.ts`. Each scene is its own chunk; the choice is kept in `localStorage` as `nk.scene`. Helpers the scenes share (toon materials, outlines, atlas planes, the camera fit, group colours) are in `src/engine/kit.ts`. The 3D tests run once for every file in `src/scenes`, and `check-size` budgets each scene.
 
-Order: Replay Deck (the first default), then Switchboard, Glovebox and Signal Box, and the Lab, which became the default (all 26 October 2026), each on its own branch and merged only when every test passes. A scene can set `pixelWidth` to render that many pixels across, scaled up without smoothing (the Lab uses 320).
+Order: Replay Deck (the first default), then Switchboard, Glovebox and Signal Box, and the Lab, which became the default (all 26 October 2026), each on its own branch and merged only when every test passes. A scene can set `pixels` to render at least that many pixels across and down, in the canvas's shape (`pixelGrid` in `kit.ts`), scaled up without smoothing (the Lab uses 320 x 200).
 
 ## Replay Deck (26 October 2026)
 
@@ -159,36 +159,57 @@ Kept away from: any railway's livery or logos, a locomotive with a face, and the
 
 ## Lab (26 October 2026), the default
 
-**Idea.** A chemistry lab, for a chemistry background. Each project is a sample flask on the shelves. Choosing one takes it to the bench under a burette: three drops, the liquid turns at the endpoint, and the terminal prints the assay. A titration ends at a measured endpoint, as the projects' numbers come from runs that can be replayed.
+**Idea.** A chemistry lab, for a chemistry background. Each project is a sample flask on the shelves, one shelf per group. Choosing one takes it to the distillation rig on the bench: its liquid runs through the glass tubing into the boiling flask over a Bunsen burner, through the condenser coil, and drips into the receiver; then the CRT prints the assay and the panel opens. A distillation ends in a measured product, the way the projects' numbers come from runs that can be replayed.
 
-**Look.** An 80s pixel-art game: the scene renders 320 pixels across and the browser scales it up without smoothing; three-band toon shading; a small palette of CRT green, amber, wood and a little neon. It matches the profile README's banner, which is a lab bench too: the flagship samples take the banner's accent for the visitor's colour scheme (#C2410C light, #FB923C dark); the room is dark in both, so lettering and the cursor take #FB923C, which reads on it. The wall sign uses the banner's 5x7 glyphs, lit over faint unlit dots, one texel a dot (gaps between dots would be finer than the 320-pixel grid). A game HUD in the site's 5x7 dot-matrix (the profile banner's hand-made glyphs, extended to the rest of the alphabet) shows real data only: "INVENTORY: 13 PROJECTS", "SAMPLES: 3 FLAGSHIPS", "LAB: OPEN", and for the sample on the bench (else the one pointed at) its title, group, tag or commit and the assay state, RUNNING then DONE: the titration ran, and no pass or fail is claimed. Nothing made up, such as levels or scores. The scene is framed in the band between the HUD bars; a window under 100 pixels tall gets no HUD. When the terminal's screen covers fewer pixels than its text needs, it shows bars for the lines instead of broken letters. For the tests, the HUD's text is on the canvas as `data-caption`.
+**Version 2 (26 October 2026).** The first Lab was a few 3D boxes and read as plain and empty. Version 2 is a dense, lived-in lab at night, drawn as an 80s pixel-art game. Necmi's reference images set the mood only (nothing traced or copied): a cosy workspace at night, deep purple-blue light against a warm orange desk lamp.
 
-**Scene.** A tiled floor and a dark wall with a dot-matrix "LAB" sign; shelves on the wall, one per group (flagships on top), with flasks whose liquid is the group colour; a long bench with a burette on its stand and a white tile, a wide beige CRT terminal with no chin, and a keyboard; a fume hood with its sash drawn as edges, a neon strip light and three vessels of different heights. A pixel arrow marks the chosen flask, which hops a little. Wide views take in the fume hood; narrow ones frame the shelves, burette and terminal.
+**Look.** A 2D canvas drawn in code (`src/scenes/lab/art.ts`) at at least 320 x 200 pixels in the canvas's shape, shown 1:1 on a plane facing an orthographic camera and scaled up by the browser without smoothing; invisible planes over the flasks carry the project ids for pointer picking. In the room:
+
+- a brick wall in purple-blue night light, with magenta and teal neon tubes whose light spills down it;
+- a window onto an invented night skyline, a full moon, stars that twinkle and windows across the city that light up;
+- a warm desk lamp pouring orange light over the rig and the CRT, and the CRT's green light on the wall behind it;
+- a hanging plant, a red LED clock showing the visitor's own time, a mug with steam, a keyboard;
+- a stack of books whose spines carry the topics of the work: MACHINE LEARNING, DATA STREAMS, CHEMISTRY;
+- a small black cat asleep on the CRT: now and then its tail flicks or an ear twitches; it never moves otherwise, is not interactive and is still with reduced motion (an ambient detail, agreed with Necmi, not a character);
+- pipes along the top and down one side, with joints and a valve, and cables hanging between them;
+- a generic periodic-table poster (coloured cells by block, no text), a DANGER sign and the biohazard symbol;
+- shelves of glowing project flasks with books and spare glassware beside them, and a barrel;
+- an oscilloscope with a moving trace, a CRT with a scrolling waveform and bars (or the assay), a test-tube rack;
+- the rig: boiling flask on a ring over a flickering burner, a slanting condenser with a coil inside, tubing and the receiver;
+- steam rising, bubbles in the flasks, now and then sparks from a cable joint;
+- a tiled floor, and over everything faint scanlines and a vignette;
+- on a tall grid, glass-fronted wall cabinets and a vent above; on a wide one, lockers and gas cylinders at the sides.
+
+It matches the profile README's banner: the flagship samples take the banner's accent for the visitor's colour scheme (#C2410C light, #FB923C dark); the room is dark in both, so lettering, the HUD's corner brackets and the selection take #FB923C. All text is the banner's 5x7 glyphs.
+
+**HUD.** A framed game UI with real data only: the lab's name, "13 PROJECTS" with a flask icon, "3 FLAGSHIPS" with a gem, "LAB OPEN", and for the sample on the rig (else the one pointed at) its title, group, release tag or commit, and ASSAY RUNNING then ASSAY DONE. No score, lives or level. The HUD's text is on the canvas as `data-caption`, for the tests.
+
+**Interaction.** The flask under the pointer or keyboard focus glows, with selection corners that pulse. Every project is also a rail button, as in every scene.
 
 | Element | Colour |
 |---|---|
 | Banner accent: flagship samples in the light and dark scheme | #C2410C, #FB923C |
-| Banner accent, lighter: sign, cursor, HUD flagship count | #FB923C |
-| CRT green, dim green | #39FF6A, #145C2A |
-| Amber (HUD) | #FFB000 |
-| Neon (strip light, endpoint), neon cyan (titrant) | #FF4FD8, #3EE8FF |
-| Wood, worktop | #8A5A33, #3A2B20 |
-| Wall | #1D2433 |
-| Glass | #B9E4EF |
-| Terminal housing | #CBB994 |
+| Banner accent, lighter: lettering, HUD brackets, selection | #FB923C |
+| Neon tubes | #FF3FD0 magenta, #2FF5E0 teal |
+| Desk lamp, LED clock | #FFB35C, #FF3B3B |
+| Boiling flask between assays | #9D4DFF |
+| Other samples: software, coursework, open source | #4AA8FF, #57E389, #C08CFF |
+| CRT green, dim green, amber | #39FF6A, #145C2A, #FFB000 |
+| Wall, mortar (night purple-blue) | #1D1838 to #221B42, #0D0A1C |
+| Wood, glass, terminal housing | #6B4A33, #B9E4EF, #C9B98F |
 
-Kept away from: a face. The terminal is a wide beige box with a screen and no chin (not a compact desktop's shape) that shows text only, among other bench equipment, with no face, arms or legs and none of a known character's colours. The fume hood holds three vessels of different heights, so no pair sits in the sash's frame like eyes. No game's sprites, fonts or sounds.
+Kept away from: a face and any character. There is no character (decided with Necmi); the cat is an ambient detail with no face drawn, only its silhouette, ears and tail. A recognisable gaming device in one reference is left out. The biohazard symbol is drawn with thin strokes, because filled blobs read as two eyes over a mouth at this size. The CRT's power light and the oscilloscope's knobs sit off to one side. No game's sprites, fonts or sounds, and no traced references.
 
-**Motion.** About 1.1 s: the flask to the bench (450 ms), three drops (330 ms) while the liquid turns, then the terminal types (300 ms). Eject returns the flask in 400 ms. A second Enter skips to the end; with reduced motion every step is a cut.
+**Motion.** About 1.6 s: the flask flies to the rig in an arc (450 ms), the liquid runs through the tubing and condenser (500 ms), three drops fall (330 ms), the CRT types the assay (300 ms). Putting it back takes 400 ms. A second Enter skips to the end; with reduced motion every step is a cut. The room's ambient animation runs at 12 frames a second (neon flicker, flame, traces, bubbles, steam, sparks, stars and city lights, the clock's colon, the cat's tail and ear, the selection's pulse), rests in a hidden tab and with low power, and with reduced motion the room is a still picture.
 
 **Sound.** Off by default; at most 4 tones per motif.
 
 | Event | Voices |
 |---|---|
 | Lift | square 330 to 660 Hz, 60 ms |
-| Drop | triangle 1320 to 990 Hz, 40 ms, once per drop |
-| Endpoint | square 587, 740, 659, 880 Hz |
-| Typing | six noise ticks |
+| Pour | noise through a 1800 Hz lowpass, 180 ms |
+| Drip | triangle 1320 to 990 Hz, 40 ms, once per drop |
+| Assay | square 587, 740, 659, 880 Hz |
 | Put back | square 660 to 330 Hz, 80 ms |
 
 ## "Who is this?" test

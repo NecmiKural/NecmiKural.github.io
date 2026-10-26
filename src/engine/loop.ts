@@ -1,5 +1,7 @@
 // Render on demand: one requestAnimationFrame loop that runs only while a tween is active or a
-// frame was requested, so an idle scene draws nothing.
+// frame was requested, so an idle scene draws nothing. A scene may add a slow ambient animation,
+// which runs only while the engine allows it (a visible tab, low power off) and never under
+// reduced motion.
 
 export const easeOut = (t: number) => 1 - (1 - t) ** 3;
 export const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
@@ -17,11 +19,32 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
   const forget = () => {
     ended = null;
   };
+  // The ambient animation: a tick a few times a second, each followed by a frame.
+  let ambient: ((now: number) => void) | null = null;
+  let ambientMs = 0;
+  let allowed = false;
+  let due = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wake = () => {
+    timer = undefined;
+    due = true;
+    invalidate();
+  };
+  const rest = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    due = false;
+  };
 
   const frame = (now: number) => {
     raf = 0;
     ended = null;
     try {
+      if (due && ambient && allowed) {
+        due = false;
+        ambient(now);
+        dirty = true;
+      }
       for (const task of [...tasks]) if (task(now)) tasks.delete(task);
       if (ended !== null) setTimeout(forget);
       if (dirty) {
@@ -34,6 +57,7 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
       return;
     }
     if (tasks.size) raf = requestAnimationFrame(frame);
+    if (ambient && allowed && !timer && !stopped) timer = setTimeout(wake, ambientMs);
   };
 
   const invalidate = () => {
@@ -83,10 +107,25 @@ export function createLoop(render: () => void, reduced: boolean, onError: () => 
     skip(on: boolean) {
       snap = on;
     },
+    // A scene's ambient animation, fps ticks a second; null removes it (a new scene comes in).
+    setAmbient(fps: number, tick: ((now: number) => void) | null) {
+      rest();
+      ambient = tick;
+      ambientMs = 1000 / fps;
+      if (tick && allowed) wake();
+    },
+    // Whether the ambient animation may run: the engine's say (a visible tab, low power off).
+    allowAmbient(on: boolean) {
+      const was = allowed;
+      allowed = on && !reduced;
+      if (!allowed) rest();
+      else if (!was && ambient) wake();
+    },
     // Pending tweens never resolve after this, so an interrupted animation cannot touch the page.
     stop() {
       stopped = true;
       cancelAnimationFrame(raf);
+      rest();
       tasks.clear();
     },
   };

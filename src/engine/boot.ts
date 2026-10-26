@@ -4,6 +4,7 @@
 
 import { Mesh, Raycaster, Vector2, WebGLRenderer, type Object3D } from "three";
 import css from "./engine.css?inline";
+import { pixelGrid } from "./kit.ts";
 import { createLoop } from "./loop.ts";
 import { createSound, read, write, type Motif } from "./sound.ts";
 import type { CreateScene, Project, Scene, Stage } from "./types.ts";
@@ -158,6 +159,7 @@ export async function boot(o: BootOptions): Promise<void> {
     caption: (text) => {
       o.canvas.dataset.caption = text;
     },
+    ambient: (fps, tick) => loop.setAmbient(fps, tick),
     get lowPower() {
       return lowPower;
     },
@@ -165,12 +167,13 @@ export async function boot(o: BootOptions): Promise<void> {
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = o.canvas;
     if (!w || !h) return;
-    const pixels = scene?.pixelWidth;
+    const pixels = scene?.pixels;
     o.canvas.style.imageRendering = pixels ? "pixelated" : "";
     if (pixels) {
-      // Exactly that many pixels across, and as many down as keep the shape; CSS scales them up.
+      // The scene's own grid, in the canvas's shape; CSS scales it up.
+      const grid = pixelGrid(pixels, w / h);
       renderer.setPixelRatio(1);
-      renderer.setSize(pixels, Math.round((pixels * h) / w), false);
+      renderer.setSize(grid.width, grid.height, false);
     } else {
       renderer.setPixelRatio(lowPower ? 1 : Math.min(devicePixelRatio, 1.5));
       renderer.setSize(w, h, false);
@@ -211,6 +214,7 @@ export async function boot(o: BootOptions): Promise<void> {
     if (closed) return;
     scene?.dispose();
     hold(null);
+    loop.setAmbient(1, null);
     delete o.canvas.dataset.caption; // the old scene's text
     scene = create(stage);
     scene.build(projects);
@@ -288,8 +292,11 @@ export async function boot(o: BootOptions): Promise<void> {
     e.preventDefault();
     fail(LOST);
   };
+  // The ambient animation rests while the tab is hidden or low power is on.
+  const motion = () => loop.allowAmbient(!document.hidden && !lowPower);
   const onVisibility = () => {
     if (document.hidden) sound.sleep();
+    motion();
   };
 
   o.canvas.addEventListener(
@@ -361,6 +368,7 @@ export async function boot(o: BootOptions): Promise<void> {
       lowPower = !lowPower;
       write("nk.lowpower", lowPower ? "on" : "off");
       lowButton.setAttribute("aria-pressed", String(lowPower));
+      motion();
       resize();
     }),
   );
@@ -401,6 +409,7 @@ export async function boot(o: BootOptions): Promise<void> {
 
   o.canvas.addEventListener("webglcontextlost", lost);
   document.addEventListener("visibilitychange", onVisibility);
+  motion();
   document.body.append(deck);
   deck.showModal();
   buttons[0]?.focus();

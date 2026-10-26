@@ -30,7 +30,7 @@ The copy check looks for em and en dashes, generic banned phrases, email and pho
 
 ## 3D mode
 
-`src/main.ts` is the only script the page loads (under 2 KB gzip). On "Open in 3D" it checks for WebGL 2 and loads the engine in `src/engine/` (three.js, the dialogs, sound, rendering on demand), which builds the scene from the page's own articles; the panel shows a copy of the article. Each scene is a chunk of its own in `src/scenes/`: the Lab (the default, drawn as 80s pixel art), the Replay Deck, the Switchboard, the Glovebox and the Signal Box, chosen in the toolbar. Everything is procedural: no model files, image textures or web fonts.
+`src/main.ts` is the only script the page loads (under 2 KB gzip). On "Open in 3D" it checks for WebGL 2 and loads the engine in `src/engine/` (three.js, the dialogs, sound, rendering on demand), which builds the scene from the page's own articles; the panel shows a copy of the article. Each scene is a chunk of its own in `src/scenes/`: the Lab (the default, a pixel-art lab at night drawn on a 2D canvas, with a slow ambient animation that stops in a hidden tab, with low power and with reduced motion), the Replay Deck, the Switchboard, the Glovebox and the Signal Box, chosen in the toolbar. Everything is procedural: no model files, image textures or web fonts.
 
 The project list is plain links to the articles (`scripts/render.ts`), so it works with JavaScript off. On screens 1080 px and wider `src/main.ts` opens it and marks the project being read with `aria-current`.
 
@@ -42,7 +42,7 @@ On every push, pull request and weekly:
 - the content copies match the profile repo;
 - the copy check and the size budgets pass;
 - Playwright: with JavaScript off, every project, claim and profile link is on the page; at 320, 768, 1024 and 1440 px in light and dark, nothing overflows, the intro is above the fold and axe finds no WCAG 2.2 AA violations;
-- Playwright, 3D mode (Chromium, WebGL in software): nothing opens or loads on its own; on a phone the button is large and works; for every scene: every project opens from the rail by keyboard and Escape steps back out; the focus order; no model, image or font requests; no frames while idle; reduced motion; sound off by default; no WebGL 2 and a lost context; axe with the deck and a project open;
+- Playwright, 3D mode (Chromium, WebGL in software): nothing opens or loads on its own; on a phone the button is large and works; for every scene: every project opens from the rail by keyboard and Escape steps back out; the focus order; no model, image or font requests; no frames while idle (the Lab: a slow ambient animation that rests in a hidden tab and with low power, and none with reduced motion); reduced motion; sound off by default; no WebGL 2 and a lost context; axe with the deck and a project open;
 - Playwright, the project list: with JavaScript off it opens and links to every project in page order; on a wide screen it sits beside the content, every link reaches its project and stays in view, and the project reached is marked; on a phone it is one line until opened;
 - Lighthouse mobile: Performance 95 or more, Accessibility, Best Practices and SEO 100;
 - lychee finds no broken links (LinkedIn is skipped because it blocks bots).
