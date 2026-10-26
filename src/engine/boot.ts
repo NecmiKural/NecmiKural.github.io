@@ -13,6 +13,7 @@ const SCENES: { id: string; name: string; load: () => Promise<{ create: CreateSc
   { id: "replay-deck", name: "Replay Deck", load: () => import("../scenes/replay-deck.ts") },
   { id: "switchboard", name: "Switchboard", load: () => import("../scenes/switchboard.ts") },
   { id: "glovebox", name: "Glovebox", load: () => import("../scenes/glovebox.ts") },
+  { id: "signal-box", name: "Signal Box", load: () => import("../scenes/signal-box.ts") },
 ];
 
 const POWER_ON: Motif = [

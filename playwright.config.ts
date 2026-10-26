@@ -21,6 +21,9 @@ export default defineConfig({
     {
       name: "3d",
       testMatch: /deck\.spec\.ts/,
+      // Software rendering is slow, and a scene's load animation can take 2 s; leave room.
+      timeout: 60_000,
+      expect: { timeout: 10_000 },
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] },
