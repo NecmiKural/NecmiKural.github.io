@@ -259,6 +259,7 @@ export async function boot(o: BootOptions): Promise<void> {
     if (!scene) return null;
     const r = o.canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, ((r.top - e.clientY) / r.height) * 2 + 1);
+    scene.camera.updateMatrixWorld(); // current even if no frame has rendered since a layout
     ray.setFromCamera(ndc, scene.camera);
     // Meshes only: lines (such as glass drawn as edges) have a pick margin of a whole unit.
     let obj: Object3D | null = ray.intersectObject(scene.world, true).find((hit) => hit.object instanceof Mesh)?.object ?? null;

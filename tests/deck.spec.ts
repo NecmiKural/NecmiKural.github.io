@@ -312,6 +312,30 @@ for (const scene of SCENES) {
       });
     }
 
+    test("the pointer finds projects before the first frame is drawn", async ({ page }) => {
+      // With requestAnimationFrame held back nothing renders, so picking must not depend on it.
+      await page.addInitScript(() => {
+        window.requestAnimationFrame = () => 0;
+      });
+      await powerOn(page, scene);
+      const reached = await page.evaluate(() => {
+        const c = document.querySelector("#deck canvas") as HTMLCanvasElement;
+        const r = c.getBoundingClientRect();
+        const found = new Set<string>();
+        for (let gy = 1; gy < 40; gy++) {
+          for (let gx = 1; gx < 48; gx++) {
+            const x = r.left + (r.width * gx) / 48;
+            const y = r.top + (r.height * gy) / 40;
+            c.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y, bubbles: true }));
+            if (c.dataset.pointed) found.add(c.dataset.pointed);
+          }
+        }
+        return { ids: [...found], frames: c.dataset.frames ?? "" };
+      });
+      expect(reached.frames, "a frame was drawn").toBe("");
+      expect(ids.filter((id) => !reached.ids.includes(id))).toEqual([]);
+    });
+
     test("low power: toggling it keeps the scene working", async ({ page }) => {
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));

@@ -96,6 +96,7 @@ export function fit(camera: PerspectiveCamera, boxes: Box3[], aspect: number, vi
   camera.near = distance / 20;
   camera.far = distance * 6;
   camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(); // picking can run before the first frame renders
 }
 
 // The bounds of what is drawn. Invisible helpers (pick targets, a hidden cord or ring) do not count,
