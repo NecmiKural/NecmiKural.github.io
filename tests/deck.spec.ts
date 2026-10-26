@@ -17,6 +17,11 @@ const bar = (page: Page, name: string) => page.locator("#deck .bar").getByRole("
 const frames = async (page: Page) => Number(await page.locator("#deck canvas").getAttribute("data-frames"));
 const held = (page: Page) => page.locator("#deck canvas"); // data-held: the project the scene holds
 
+// These start 3D mode with the button, so it must not open on its own first (see auto.spec.ts).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("nk.3d", "off"));
+});
+
 // With a scene id, also checks that this scene is the one running: a scene that fails to load or
 // is not registered falls back to the default, which would otherwise pass its tests.
 async function powerOn(page: Page, scene?: string) {
@@ -34,7 +39,7 @@ async function openAndClose(page: Page) {
   await expect(page.locator("#panel")).toBeHidden();
 }
 
-test("focus order: header links, Power on, then the rail; arrows, Home and End move within it", async ({ page }) => {
+test("focus order: header links, Open in 3D, then the rail; arrows, Home and End move within it", async ({ page }) => {
   await page.goto("/");
   for (const l of data.links.filter((l) => !isSite(l.url))) {
     await page.keyboard.press("Tab");

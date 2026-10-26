@@ -12,6 +12,11 @@ const VIEWPORTS = [
   { width: 1440, height: 900 },
 ];
 
+// These test the HTML page itself, so 3D mode must not open on its own (see auto.spec.ts).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("nk.3d", "off"));
+});
+
 test.describe("without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
 
