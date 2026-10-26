@@ -1,6 +1,6 @@
-// The only script on page load. On desktops and tablets it opens 3D mode once the HTML page has
-// painted; on phones, with reduced motion, with Save-Data, without WebGL 2, or after the visitor
-// powered 3D mode off, the page stays as it is and "Open in 3D" loads it on request.
+// The only script on page load. On a click of "Open in 3D" it checks for WebGL 2 and loads 3D
+// mode; without a click it downloads nothing else. It also opens the project list on wide screens
+// and marks the project being read in it.
 
 const power = document.getElementById("power");
 const line = document.getElementById("power-status");
@@ -17,66 +17,54 @@ if (power instanceof HTMLButtonElement && line) {
   const say = (text: string) => {
     line.textContent = text;
   };
-  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
-  const media = (query: string) => matchMedia(query).matches;
   let busy = false;
-
-  // Phones: narrow, or a touch screen whose short side is under 600 px (sideways, or a phone
-  // asking for the desktop site). They keep the light HTML page. index.html sizes the button by
-  // the same rule.
-  const phone = media("(max-width: 599px)") || (media("(pointer: coarse)") && Math.min(screen.width, screen.height) < 600);
-  let auto = !phone && !saveData && !media("(prefers-reduced-motion: reduce)") && pref("nk.3d") !== "off";
-  // The visitor has not started on the page: followed a link to a project, scrolled or moved focus.
-  const untouched = () => !location.hash && scrollY === 0 && document.activeElement === document.body;
-
-  // `asked`: the visitor pressed the button. Opening on its own stays silent when it cannot.
-  const open = async (asked: boolean) => {
+  power.addEventListener("click", async () => {
     if (busy) return;
     say("");
     const stored = pref("nk.lowpower");
-    const lowPower = stored ? stored === "on" : media("(pointer: coarse)") || saveData;
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+    const lowPower = stored ? stored === "on" : matchMedia("(pointer: coarse)").matches || saveData === true;
     const canvas = document.createElement("canvas");
     const gl = canvas.getContext("webgl2", { antialias: !lowPower, powerPreference: lowPower ? "low-power" : "default" });
     if (!gl) {
-      if (asked) say("3D mode needs WebGL 2, which this browser does not provide. Everything on this page works without it.");
+      say("3D mode needs WebGL 2, which this browser does not provide. Everything on this page works without it.");
       return;
     }
     busy = true;
     try {
       const { boot } = await import("./engine/boot.ts");
-      // On its own, and the visitor started on the page while it downloaded: leave the page be. A
-      // press on the button meanwhile (which clears `auto`) asked for it.
-      if (!asked && auto && !untouched()) return;
       await boot({ canvas, gl, lowPower, opener: power, say });
     } catch {
-      if (asked) say("3D mode did not load. Check your connection and try again; everything on this page works without it.");
+      say("3D mode did not load. Check your connection and try again; everything on this page works without it.");
     } finally {
       busy = false;
     }
-  };
-
-  power.addEventListener("click", () => {
-    auto = false;
-    try {
-      localStorage.setItem("nk.3d", "on"); // asked for it: open on its own next time too
-    } catch {
-      // Without storage the choice lasts for this visit only.
-    }
-    void open(true);
   });
+}
 
-  // After load and two frames, so the HTML page is what paints first and stays the largest paint;
-  // and only if the visitor has not started on it, or opened or powered off 3D mode, meanwhile.
-  if (auto) {
-    addEventListener(
-      "load",
-      () =>
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            if (auto && untouched() && pref("nk.3d") !== "off") void open(false);
-          }),
-        ),
-      { once: true },
-    );
-  }
+// The project list: collapsed in the page flow on narrow screens, a column beside the content on
+// wide ones (index.html), where it opens and marks the project being read: the last one whose
+// top has passed a line a third of the way down, or at the foot of the page, the one linked to.
+const toc = document.getElementById("toc");
+if (toc instanceof HTMLDetailsElement && matchMedia("(min-width: 1080px)").matches) {
+  toc.open = true;
+  const links = [...toc.querySelectorAll("a")];
+  const articles = links.map((a) => document.getElementById(a.hash.slice(1)));
+  let queued = false;
+  const mark = () => {
+    queued = false;
+    const seen = (el: HTMLElement | null) => !!el && el.getBoundingClientRect().top <= innerHeight / 3;
+    let i = articles.findLastIndex(seen);
+    const target = links.findIndex((a) => a.hash === location.hash);
+    const foot = scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
+    if (foot && target >= 0 && (articles[target]?.getBoundingClientRect().top ?? innerHeight) < innerHeight) i = target;
+    links.forEach((a, j) => (j === i ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current")));
+  };
+  const later = () => {
+    if (!queued) requestAnimationFrame(mark);
+    queued = true;
+  };
+  addEventListener("scroll", later, { passive: true });
+  addEventListener("hashchange", later);
+  mark();
 }

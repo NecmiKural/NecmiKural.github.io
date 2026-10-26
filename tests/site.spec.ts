@@ -12,11 +12,6 @@ const VIEWPORTS = [
   { width: 1440, height: 900 },
 ];
 
-// These test the HTML page itself, so 3D mode must not open on its own (see auto.spec.ts).
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("nk.3d", "off"));
-});
-
 test.describe("without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
 
@@ -29,6 +24,52 @@ test.describe("without JavaScript", () => {
       await expect(page.locator(`header a[href="${l.url}"]`)).toBeVisible();
     }
     await expect(page.locator("#power-row")).toBeHidden();
+  });
+
+  test("the project list opens and links to every project", async ({ page }) => {
+    await page.goto("/");
+    const list = page.getByRole("navigation", { name: "Projects" });
+    await list.locator("summary").click();
+    const links = list.getByRole("link");
+    await expect(links).toHaveCount(data.projects.length);
+    expect(await links.evaluateAll((as) => as.map((a) => a.getAttribute("href")))).toEqual(data.projects.map((p) => `#${p.id}`));
+    const last = data.projects.at(-1) as Portfolio["projects"][number];
+    await links.last().click();
+    await expect(page.locator(`#${last.id}`)).toBeInViewport();
+  });
+});
+
+test.describe("the project list", () => {
+  test("beside the content on a wide screen: every link reaches its project, and the one being read is marked", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const list = page.getByRole("navigation", { name: "Projects" });
+    const links = list.getByRole("link");
+    await expect(links.first()).toBeVisible(); // open without a click
+    const main = (await page.locator("main").boundingBox()) as { x: number };
+    expect(((await list.boundingBox()) as { x: number; width: number }).x).toBeLessThan(main.x);
+    for (const [i, p] of data.projects.entries()) {
+      await links.nth(i).click();
+      await expect(page).toHaveURL(new RegExp(`#${p.id}$`));
+      await expect(page.locator(`#${p.id} h3`)).toBeInViewport();
+      await expect(links.nth(i)).toBeInViewport(); // the list stays in view
+      await expect(links.nth(i)).toHaveAttribute("aria-current", "location");
+    }
+  });
+
+  test("collapsed at the top on a phone, and it works when opened", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    const list = page.getByRole("navigation", { name: "Projects" });
+    const summary = list.locator("summary");
+    await expect(summary).toHaveText(`Projects (${data.projects.length})`);
+    await expect(list.getByRole("link").first()).toBeHidden();
+    const box = (await list.boundingBox()) as { height: number };
+    expect(box.height).toBeLessThan(60); // one line until opened
+    await summary.click();
+    const p = data.projects[4];
+    await list.getByRole("link", { name: p.title, exact: true }).click();
+    await expect(page.locator(`#${p.id} h3`)).toBeInViewport();
   });
 });
 

@@ -190,6 +190,16 @@ function body(data: Portfolio, sizes: Sizes): string {
   });
   const unknown = data.projects.find((p) => !(p.group in HEADINGS));
   if (unknown) throw new Error(`unknown group ${unknown.group} for ${unknown.id}`);
+  // Every project, grouped as on the page and in the 3D rail; plain links to the articles.
+  const groups = Object.keys(HEADINGS).flatMap((g) => {
+    const items = data.projects
+      .filter((p) => p.group === g)
+      .map((p) => `<li><a href="#${p.id}">${esc(need(p.title, `projects[${p.id}].title`))}</a></li>`);
+    return items.length ? [`<li><span>${HEADINGS[g]}</span>\n<ul>\n${items.join("\n")}\n</ul></li>`] : [];
+  });
+  const toc =
+    `<nav aria-label="Projects"><details id="toc">` +
+    `<summary>Projects (${data.projects.length})</summary>\n<ul>\n${groups.join("\n")}\n</ul></details></nav>`;
   // Joined into one line, as in the profile README; an empty field is skipped.
   const facts = [need(prof.education, "profile.education"), prof.location, prof.availability].filter(Boolean);
   return [
@@ -201,10 +211,11 @@ function body(data: Portfolio, sizes: Sizes): string {
     // In place from the first paint, so showing it shifts nothing; a noscript style in index.html
     // hides it when JavaScript is off.
     `<div id="power-row"><p><button id="power" type="button">Open in 3D</button>` +
-      ` <span class="note">The same projects in a 3D scene. Sound stays off unless you turn it on.</span></p>` +
+      ` <span class="note">The same projects in a 3D scene.</span></p>` +
       `<p id="power-status" class="note" role="status"></p></div>`,
     `<p class="note">${esc(need(prof.provenance, "profile.provenance"))}</p>`,
     "</header>",
+    toc,
     `<main>\n${sections.join("\n")}\n</main>`,
     `<footer><p>Built from <a href="${CONTENT_SOURCE}">the profile README's content file</a>.` +
       ` <a href="${SOURCE_REPO}">Source of this site</a>.</p></footer>`,

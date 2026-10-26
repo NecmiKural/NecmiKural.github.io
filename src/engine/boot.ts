@@ -380,10 +380,6 @@ export async function boot(o: BootOptions): Promise<void> {
       // A lost context can refuse cleanup calls; the canvas is removed either way.
     }
     deck.remove();
-    // Powered off, or stopped by an error (which would likely recur): this visitor stays on the
-    // HTML page next time, until they press "Open in 3D" again. A lost context is often passing
-    // (a GPU reset, sleep), so it does not count.
-    if (message !== LOST) write("nk.3d", "off");
     sound.play(POWER_OFF);
     sound.sleep(400);
     o.opener.focus({ preventScroll: true }); // the page stays where the visitor left it
