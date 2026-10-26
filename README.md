@@ -8,7 +8,7 @@ Source of https://necmikural.github.io: one static HTML page that works with Jav
 
 Do not edit the copies. Change the TOML in that repo, run its build, push, then run `npm run sync-content` here and commit. CI compares the copies byte for byte with that repo's `main` on every push and every Monday, and fails if they differ.
 
-The three flagship visuals are fetched at build time from their repos at the pinned tag or commit, and served from this site.
+Project visuals (the flagship demos, crossfade's demo GIF, figures from the coursework repos) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF shows a still of its first frame, cut at build time, until the visitor presses its Play button (without JavaScript the still stays). On the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens; neither moves with reduced motion or in print.
 
 ## Commands
 
@@ -19,7 +19,7 @@ npm ci
 npm run dev            # local server
 npm run build          # dist/, fetches the visuals
 npm run check          # types and the copy check over the repo and dist/
-npm run size           # budgets: index.html under 14 KB gzip, entry JS under 2 KB, 3D mode under 200 KB per scene, og.png 1200x630
+npm run size           # budgets: index.html under 14 KB gzip, entry JS under 2 KB, 3D mode under 200 KB per scene, each visual under 512 KB and all under 2 MB, og.png 1200x630
 npm test               # Playwright: the page in Chromium, Firefox and WebKit; 3D mode in Chromium
 npx lhci autorun       # Lighthouse, mobile
 npm run og             # redraw public/og.png after the name, headline or flagships change

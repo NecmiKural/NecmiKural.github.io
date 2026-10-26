@@ -1,9 +1,10 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { defineConfig, type Plugin } from "vite";
-import { renderPage, svgSize, type Portfolio, type Sizes } from "./scripts/render.ts";
+import { firstFrame, imageSize, renderPage, type Portfolio, type Sizes } from "./scripts/render.ts";
 
-// Renders index.html from the vendored content file. The flagship visuals are fetched from
-// their repos at the pinned tag or commit into public/visuals, so the site serves them itself.
+// Renders index.html from the vendored content file. The project visuals are fetched from their
+// repos at the pinned commit into public/visuals, so the site serves them itself; a GIF also
+// gets a still of its first frame, for visitors who ask for less motion.
 function portfolio(): Plugin {
   let data: Portfolio;
   let sizes: Sizes = {};
@@ -11,21 +12,29 @@ function portfolio(): Plugin {
     name: "portfolio",
     async buildStart() {
       data = JSON.parse(await readFile("content/portfolio.json", "utf8"));
+      await rm("public/visuals", { recursive: true, force: true }); // no file left from an earlier build
       await mkdir("public/visuals", { recursive: true });
       const fetched = await Promise.all(
         data.projects
           .filter((p) => p.urls.visual)
           .map(async (p) => {
             const url = p.urls.visual as string;
-            if (!url.startsWith("https://raw.githubusercontent.com/NecmiKural/")) {
-              throw new Error(`${p.id}: visual is not from a NecmiKural repo: ${url}`);
+            if (!/^https:\/\/raw\.githubusercontent\.com\/NecmiKural\/[\w.-]+\/[0-9a-f]{40}\/[\w./-]+\.(svg|png|gif)$/.test(url) || url.includes("..")) {
+              throw new Error(`${p.id}: visual is not a file in a NecmiKural repo at a pinned commit: ${url}`);
             }
-            const res = await fetch(url);
+            const res = await fetch(url, { redirect: "error" });
             if (!res.ok) throw new Error(`${p.id}: ${url} returned ${res.status}`);
-            const svg = await res.text();
-            const size = svgSize(svg, url);
-            await writeFile(`public/visuals/${p.id}.svg`, svg);
-            return [p.id, size] as const;
+            const bytes = new Uint8Array(await res.arrayBuffer());
+            const { kind, width, height } = imageSize(bytes, url);
+            if (!url.endsWith(`.${kind}`)) throw new Error(`${p.id}: ${url} is not a ${kind} file`);
+            const file = `${p.id}.${kind}`;
+            await writeFile(`public/visuals/${file}`, bytes);
+            let still: string | undefined;
+            if (kind === "gif") {
+              still = `${p.id}-still.gif`;
+              await writeFile(`public/visuals/${still}`, firstFrame(bytes, url));
+            }
+            return [p.id, { width, height, file, still }] as const;
           }),
       );
       sizes = Object.fromEntries(fetched);

@@ -180,6 +180,38 @@ test.describe("on a phone", () => {
   });
 });
 
+test("a project's visual shows in the panel, rises in as it opens, and plays there", async ({ page }) => {
+  const p = data.projects.find((x) => x.urls.visual?.endsWith(".gif")) as Portfolio["projects"][number];
+  await powerOn(page);
+  await rail(page, p.id).focus();
+  await page.keyboard.press("Enter");
+  const img = page.locator("#panel img.visual");
+  await expect(img).toBeVisible();
+  await expect(img).toHaveAttribute("alt", p.visual_alt as string);
+  expect(await img.evaluate((i) => getComputedStyle(i).animationName)).toBe("panel-rise");
+  await expect(img).toHaveCSS("opacity", "1");
+  await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+  await page.locator("#panel button.play").click();
+  await expect(img).toHaveAttribute("src", `visuals/${p.id}.gif`);
+  await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+});
+
+test.describe("with reduced motion, the panel", () => {
+  test.use({ reducedMotion: "reduce" });
+
+  test("shows the visual still: the GIF's first frame, no rise", async ({ page }) => {
+    const p = data.projects.find((x) => x.urls.visual?.endsWith(".gif")) as Portfolio["projects"][number];
+    await powerOn(page);
+    await rail(page, p.id).focus();
+    await page.keyboard.press("Enter");
+    const img = page.locator("#panel img.visual");
+    await expect(img).toBeVisible();
+    await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+    await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+    expect(await img.evaluate((i) => getComputedStyle(i).animationName)).toBe("none");
+  });
+});
+
 test("without WebGL 2 the page says so, loads no 3D code and keeps focus", async ({ page }) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext as (...args: unknown[]) => unknown;

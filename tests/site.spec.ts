@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { isSite, type Portfolio } from "../scripts/render.ts";
 
 const data: Portfolio = JSON.parse(readFileSync("content/portfolio.json", "utf8"));
@@ -105,6 +105,100 @@ test.describe("the project list", () => {
     const p = data.projects[4];
     await list.getByRole("link", { name: p.title, exact: true }).click();
     await expect(page.locator(`#${p.id} h3`)).toBeInViewport();
+  });
+});
+
+test.describe("project visuals", () => {
+  const shown = data.projects.filter((p) => p.urls.visual);
+  const moving = shown.filter((p) => p.urls.visual?.endsWith(".gif"));
+  const loaded = (img: Locator) => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0);
+
+  test("each is served by this site, sized, described, captioned, lazy, and in full view once scrolled to", async ({ page }) => {
+    await page.goto("/");
+    expect(shown.length).toBeGreaterThan(0);
+    for (const p of shown) {
+      const img = page.locator(`#${p.id} figure img.visual`);
+      await expect(img).toHaveAttribute("src", new RegExp(`^visuals/${p.id}(-still)?\\.(svg|png|gif)$`));
+      await expect(img).toHaveAttribute("alt", p.visual_alt as string);
+      await expect(img).toHaveAttribute("loading", "lazy");
+      const [w, h] = [Number(await img.getAttribute("width")), Number(await img.getAttribute("height"))];
+      expect(w > 0 && h > 0, p.id).toBe(true);
+      if (p.visual_caption) await expect(page.locator(`#${p.id} figcaption`)).toHaveText(p.visual_caption);
+      await img.scrollIntoViewIfNeeded();
+      await expect.poll(() => loaded(img), { message: p.id }).toBe(true);
+      // A raster image (a GIF's still included) is the size it says; an SVG's own size depends on the browser.
+      if (!p.urls.visual?.endsWith(".svg")) expect(await img.evaluate((i: HTMLImageElement) => [i.naturalWidth, i.naturalHeight]), p.id).toEqual([w, h]);
+      await expect(img).toHaveCSS("opacity", "1");
+    }
+  });
+
+  test("each holds its space before its file arrives, so nothing shifts when it does", async ({ page }) => {
+    await page.route("**/visuals/**", () => {});
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    for (const p of shown) {
+      const img = page.locator(`#${p.id} img.visual`);
+      const [w, h] = [Number(await img.getAttribute("width")), Number(await img.getAttribute("height"))];
+      const box = await img.boundingBox();
+      expect(box?.width, p.id).toBeGreaterThan(200);
+      expect(Math.abs((box?.height ?? 0) - ((box?.width ?? 0) * h) / w), p.id).toBeLessThan(3);
+    }
+  });
+
+  test("they rise into place as they scroll into view, where the browser can tie that to scrolling", async ({ page }) => {
+    await page.goto("/");
+    test.skip(!(await page.evaluate(() => CSS.supports("animation-timeline: view()"))), "no scroll-driven animations here");
+    expect(await page.locator("img.visual").first().evaluate((i) => getComputedStyle(i).animationName)).toBe("rise");
+  });
+
+  test("on paper every visual shows, none left mid-rise", async ({ page }) => {
+    await page.emulateMedia({ media: "print" });
+    await page.goto("/");
+    for (const p of shown) await expect(page.locator(`#${p.id} img.visual`), p.id).toHaveCSS("opacity", "1");
+  });
+
+  test("a moving visual holds its first frame until played, and stops when pressed again", async ({ page }) => {
+    expect(moving.length).toBeGreaterThan(0);
+    await page.goto("/");
+    for (const p of moving) {
+      const img = page.locator(`#${p.id} img.visual`);
+      const play = page.locator(`#${p.id} button.play`);
+      await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+      await expect(play).toHaveAccessibleName(`Play the demo of ${p.title}`);
+      await play.click();
+      await expect(img).toHaveAttribute("src", `visuals/${p.id}.gif`);
+      await expect(play).toHaveAccessibleName(`Stop the demo of ${p.title}`);
+      await expect.poll(() => loaded(img), { message: p.id }).toBe(true);
+      await play.click();
+      await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+      await expect(play).toHaveAccessibleName(`Play the demo of ${p.title}`);
+    }
+  });
+
+  test.describe("with reduced motion", () => {
+    test.use({ reducedMotion: "reduce" });
+
+    test("nothing moves: no visual animates, and a GIF shows its first frame", async ({ page }) => {
+      await page.goto("/");
+      for (const p of shown) {
+        const img = page.locator(`#${p.id} img.visual`);
+        await img.scrollIntoViewIfNeeded();
+        await expect.poll(() => loaded(img), { message: p.id }).toBe(true);
+        if (moving.includes(p)) await expect(img).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+        expect(await img.evaluate((i) => getComputedStyle(i).animationName), p.id).toBe("none");
+      }
+    });
+  });
+
+  test.describe("without JavaScript", () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("a moving visual stays on its first frame, with no button that cannot work", async ({ page }) => {
+      await page.goto("/");
+      for (const p of moving) {
+        await expect(page.locator(`#${p.id} img.visual`)).toHaveAttribute("src", `visuals/${p.id}-still.gif`);
+        await expect(page.locator(`#${p.id} button.play`)).toBeHidden();
+      }
+    });
   });
 });
 
