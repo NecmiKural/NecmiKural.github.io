@@ -148,14 +148,20 @@ test.describe("project visuals", () => {
     }
   });
 
-  test("portrait screenshots sit side by side on a wide screen, and each still fills its own column", async ({ page }) => {
-    const tall = data.projects.find((p) => p.visuals.filter((v) => /screenshots\//.test(v.url)).length >= 2);
-    test.skip(!tall, "no project with two portrait screenshots");
+  test("portrait screenshots sit side by side on a wide screen, each in a narrow column of its own", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
-    const [a, b] = await page.locator(`#${tall?.id} figure.tall`).evaluateAll((fs) => fs.slice(0, 2).map((f) => f.getBoundingClientRect().toJSON()));
+    // The first two portrait figures of the first project that has two; failing, not skipping, if none does.
+    const rects = await page.evaluate(() => {
+      const article = [...document.querySelectorAll("article")].find((a) => a.querySelectorAll("figure.tall").length >= 2);
+      return [...(article?.querySelectorAll("figure.tall") ?? [])].slice(0, 2).map((f) => f.getBoundingClientRect().toJSON());
+    });
+    expect(rects.length, "a project with two portrait screenshots").toBe(2);
+    const [a, b] = rects;
     expect(b.top).toBe(a.top);
     expect(b.left).toBeGreaterThan(a.right);
     expect(a.width).toBeGreaterThan(200);
+    expect(a.width).toBeLessThan(320); // a column of its own, not stretched to share the row
   });
 
   test("they rise into place as they scroll into view, where the browser can tie that to scrolling", async ({ page }) => {
