@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { LEFT_OUT } from "../scripts/latest.ts";
-import { isSite, type Portfolio } from "../scripts/render.ts";
+import { esc, isSite, SITE, type Portfolio } from "../scripts/render.ts";
 
 const data: Portfolio = JSON.parse(readFileSync("content/portfolio.json", "utf8"));
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -243,11 +243,12 @@ test.describe("project visuals", () => {
 
 test.describe("the hero, Try it and Latest", () => {
   for (const colorScheme of ["light", "dark"] as const) {
-    test(`${colorScheme}: the banner is the heading, named by its alt, in the scheme's colours and fetched first`, async ({ page }) => {
+    test(`${colorScheme}: the heading is the name and role in text, with the banner in the scheme's colours, fetched first`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await page.goto("/");
-      await expect(page.getByRole("heading", { level: 1, name: data.profile.name, exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: `${data.profile.name}, software engineer`, exact: true })).toBeVisible();
       const img = page.locator("h1 img.banner");
+      await expect(img).toHaveAttribute("alt", "");
       await expect(img).toHaveAttribute("fetchpriority", "high");
       await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
       expect(await img.evaluate((i: HTMLImageElement) => i.currentSrc)).toMatch(new RegExp(`/assets/banner-${colorScheme}\\.svg$`));
@@ -298,6 +299,52 @@ test("the CV the header links to is served by this site, as a PDF", async ({ req
   expect(res.status()).toBe(200);
   expect(res.headers()["content-type"]).toContain("application/pdf");
   expect((await res.body()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+});
+
+// What a crawler gets without running any script: the raw HTML and the files beside it. However
+// the 3D mode changes, this keeps the content readable to search engines and AI agents.
+test.describe("for search engines and AI crawlers", () => {
+  const get = async (request: APIRequestContext, path: string) => {
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(200);
+    return res.text();
+  };
+
+  test("the raw HTML has the name, the role and every project, and its JSON-LD parses", async ({ request }) => {
+    const html = await get(request, "/");
+    expect(html).toMatch(new RegExp(`<h1>.*<span class="role">${data.profile.name}, software engineer</span></h1>`));
+    for (const p of data.projects) {
+      expect(html).toContain(`<article id="${p.id}">`);
+      expect(html).toContain(`href="${esc(p.urls.repo)}">${esc(p.title)}</a></h3>`);
+    }
+    const scripts = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)];
+    expect(scripts).toHaveLength(1);
+    const graph: Record<string, any>[] = JSON.parse(scripts[0][1])["@graph"];
+    const page = graph.find((n) => n["@type"] === "ProfilePage");
+    const person = graph.find((n) => n["@id"] === page?.mainEntity["@id"]);
+    expect(person).toMatchObject({ "@type": "Person", name: data.profile.name, address: { addressCountry: "NZ" } });
+    expect(data.profile.education).toContain(person?.alumniOf.name);
+    expect(person?.sameAs).toContain(data.links.find((l) => l.label === "LinkedIn")?.url);
+    const code = graph.filter((n) => n["@type"] === "SoftwareSourceCode");
+    expect(code.map((c) => c.codeRepository)).toEqual(data.projects.filter((p) => p.group === "flagship").map((p) => p.urls.repo));
+    for (const c of code) expect(c.author["@id"]).toBe(person?.["@id"]);
+  });
+
+  test("robots.txt lets every crawler in and names the sitemap, which lists the page", async ({ request }) => {
+    const robots = await get(request, "/robots.txt");
+    expect(robots).toContain("User-agent: *\n");
+    expect(robots).toContain("\nAllow: /\n");
+    expect(robots).not.toContain("Disallow");
+    expect(robots).toContain(`Sitemap: ${SITE}sitemap.xml`);
+    expect(await get(request, "/sitemap.xml")).toContain(`<loc>${SITE}</loc>`);
+  });
+
+  test("llms.txt names him and links every project, the demos and the profiles", async ({ request }) => {
+    const llms = await get(request, "/llms.txt");
+    expect(llms.startsWith(`# ${data.profile.name}, software engineer\n\n> ${data.profile.headline}\n`)).toBe(true);
+    const urls = [...data.projects.map((p) => p.urls.repo), ...data.try.map((t) => t.url), ...data.links.filter((l) => !isSite(l.url)).map((l) => l.url)];
+    for (const url of urls) expect(llms).toContain(`](${url})`);
+  });
 });
 
 test("with JavaScript, the optional 3D mode is offered", async ({ page }) => {
