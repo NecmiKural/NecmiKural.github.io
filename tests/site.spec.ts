@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { LEFT_OUT } from "../scripts/latest.ts";
@@ -337,6 +337,12 @@ test.describe("for search engines and AI crawlers", () => {
     expect(robots).not.toContain("Disallow");
     expect(robots).toContain(`Sitemap: ${SITE}sitemap.xml`);
     expect(await get(request, "/sitemap.xml")).toContain(`<loc>${SITE}</loc>`);
+  });
+
+  test("Google Search Console's verification file is served as given; without it the site is unverified", async ({ request }) => {
+    const files = readdirSync("public").filter((f) => /^google[0-9a-f]+\.html$/.test(f));
+    expect(files).toHaveLength(1);
+    expect(await get(request, `/${files[0]}`)).toBe(readFileSync(`public/${files[0]}`, "utf8"));
   });
 
   test("llms.txt names him and links every project, the demos and the profiles", async ({ request }) => {
