@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { defineConfig, type Plugin } from "vite";
 import { fetchLatest, LEFT_OUT } from "./scripts/latest.ts";
-import { firstFrame, imageSize, renderPage, type Latest, type Portfolio, type Sizes } from "./scripts/render.ts";
+import { crawlerFiles, firstFrame, imageSize, renderPage, type Latest, type Portfolio, type Sizes } from "./scripts/render.ts";
 
 // Renders index.html from the vendored content file. The project visuals are fetched from their
 // repos at the pinned commit into public/visuals, so the site serves them itself; a GIF also
@@ -52,6 +52,10 @@ function portfolio(): Plugin {
       latest = await fetchingLatest;
     },
     transformIndexHtml: { order: "post", handler: (html) => renderPage(html, data, sizes, latest) },
+    // robots.txt, sitemap.xml and llms.txt, from the same content as the page.
+    generateBundle() {
+      for (const [fileName, source] of Object.entries(crawlerFiles(data))) this.emitFile({ type: "asset", fileName, source });
+    },
   };
 }
 

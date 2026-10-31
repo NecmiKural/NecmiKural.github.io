@@ -12,6 +12,8 @@ Project visuals (the flagship demos, app screenshots, crossfade's demo GIF, char
 
 The "Latest" strip in the header is fetched at build time, not stored: the newest release across the shown NecmiKural repos (GitHub API, with the Actions token in CI) and the newest update to a Space or dataset in "Try it" (Hugging Face API), each with its date. If any request fails, the build leaves the strip out and logs why; it never shows a guess.
 
+For search engines and AI agents, the build also writes, from the same content file: the heading as text (name and role, under the banner); JSON-LD with a `ProfilePage` about the `Person` (university, country, topics, profiles) and the selected projects as `SoftwareSourceCode`; `robots.txt`, which lets every crawler in, AI crawlers named; `sitemap.xml`; and [`llms.txt`](https://llmstxt.org/), the page as Markdown. No hidden text: everything a crawler reads is on the page.
+
 ## Commands
 
 Node 24 (`.nvmrc`).
@@ -43,7 +45,7 @@ Design notes, colours, sound motifs and the "who is this?" test log are in [docs
 On every push, pull request and weekly:
 - the content copies match the profile repo;
 - the copy check and the size budgets pass;
-- Playwright: with JavaScript off, every project, claim and profile link is on the page and the hero's two links reach their sections; the banner is the heading in both colour schemes; "Try it" lists every item with its project; the "Latest" strip, when present, has real dates and links; at 320, 768, 1024 and 1440 px in light and dark, nothing overflows, the intro is above the fold and axe finds no WCAG 2.2 AA violations;
+- Playwright: with JavaScript off, every project, claim and profile link is on the page and the hero's two links reach their sections; the heading is the name and role in text, with the banner, in both colour schemes; for crawlers, the raw HTML (no script run) has the name, the role and every project, its JSON-LD parses and names the person and the selected projects, and `robots.txt`, `sitemap.xml` and `llms.txt` are served, with every project, demo and profile linked from `llms.txt`; "Try it" lists every item with its project; the "Latest" strip, when present, has real dates and links; at 320, 768, 1024 and 1440 px in light and dark, nothing overflows, the intro is above the fold and axe finds no WCAG 2.2 AA violations;
 - Playwright, 3D mode (Chromium, WebGL in software): nothing opens or loads on its own; on a phone the button is large and works; for every scene: every project opens from the rail by keyboard and Escape steps back out; the focus order; no model, image or font requests; no frames while idle (the Lab: a slow ambient animation that rests in a hidden tab and with low power, and none with reduced motion); reduced motion; sound off by default; no WebGL 2 and a lost context; axe with the deck and a project open;
 - Playwright, the project list: with JavaScript off it opens and links to every project in page order; on a wide screen it sits beside the content, every link reaches its project and stays in view, and the project reached is marked; on a phone it is one line until opened;
 - Lighthouse mobile: Performance 95 or more, Accessibility, Best Practices and SEO 100;

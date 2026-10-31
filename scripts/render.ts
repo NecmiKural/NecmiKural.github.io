@@ -16,6 +16,16 @@ const COURSEWORK_NOTE =
   "Individual work unless stated. Course data and trained weights are not published.";
 const SOURCE_REPO = "https://github.com/NecmiKural/NecmiKural.github.io";
 const CONTENT_SOURCE = "https://github.com/NecmiKural/NecmiKural/blob/main/content/portfolio.toml";
+// For the structured data (head below): facts the content file states only in prose. The
+// university and the country are checked against that prose, so the two cannot drift apart.
+const ROLE = "software engineer";
+const UNIVERSITY = "University of Waikato";
+const KNOWS_ABOUT = [
+  "AI agents", "Tool calling", "Model Context Protocol (MCP)", "Retrieval-augmented generation (RAG)",
+  "LLM evaluation", "Python", "PostgreSQL",
+];
+// Named in robots.txt so the welcome is explicit; "*" already lets every crawler in.
+const AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ClaudeBot", "Claude-SearchBot", "PerplexityBot", "Google-Extended"];
 
 export interface Link {
   label: string;
@@ -83,10 +93,12 @@ function need<T>(value: T | null | undefined, where: string): T {
   return value;
 }
 
-function href(url: string): string {
+function https(url: string): string {
   if (!url.startsWith("https://")) throw new Error(`link is not https: ${url}`);
-  return esc(url);
+  return url;
 }
+
+const href = (url: string): string => esc(https(url));
 
 const atRef = (ref: string): string => (ref.startsWith("v") ? ref : `commit ${ref.slice(0, 7)}`);
 
@@ -206,19 +218,51 @@ function article(p: Project, sizes: Sizes): string {
     .join("\n");
 }
 
-function head(data: Portfolio): string {
-  const { name, headline } = data.profile;
-  const title = `${need(name, "profile.name")}, software engineer`;
-  const description = need(headline, "profile.headline");
-  const links = data.links.filter((l) => !isSite(l.url));
+// The page title and the text of its heading.
+const titleOf = (data: Portfolio): string => `${need(data.profile.name, "profile.name")}, ${ROLE}`;
+
+// Education, location and availability, joined into one line as in the profile README; an empty
+// field is skipped.
+const factsOf = (prof: Portfolio["profile"]): string =>
+  [need(prof.education, "profile.education"), prof.location, prof.availability].filter(Boolean).join(" ");
+
+// schema.org JSON-LD: the page is a profile page about the person, who wrote the selected projects.
+function structuredData(data: Portfolio): object {
+  const { name, headline, education, location } = data.profile;
+  if (!education.includes(UNIVERSITY)) throw new Error(`profile.education does not name ${UNIVERSITY}`);
+  if (!/Aotearoa|New Zealand/.test(location)) throw new Error("profile.location is not in New Zealand");
   const person = {
-    "@context": "https://schema.org",
     "@type": "Person",
+    "@id": `${SITE}#person`,
     name,
     url: SITE,
-    jobTitle: "Software engineer",
-    sameAs: links.map((l) => l.url),
+    jobTitle: ROLE[0].toUpperCase() + ROLE.slice(1),
+    description: headline,
+    alumniOf: { "@type": "CollegeOrUniversity", name: UNIVERSITY },
+    address: { "@type": "PostalAddress", addressCountry: "NZ" },
+    knowsAbout: KNOWS_ABOUT,
+    // Profiles elsewhere; the site itself and the CV it serves are not.
+    sameAs: data.links.filter((l) => new URL(l.url).origin !== new URL(SITE).origin).map((l) => l.url),
   };
+  const code = data.projects
+    .filter((p) => p.group === "flagship")
+    .map((p) => ({
+      "@type": "SoftwareSourceCode",
+      "@id": `${SITE}#${p.id}`,
+      name: p.title,
+      description: p.card,
+      codeRepository: p.urls.repo,
+      keywords: p.stack,
+      author: { "@id": person["@id"] },
+    }));
+  const page = { "@type": "ProfilePage", "@id": SITE, url: SITE, name: titleOf(data), mainEntity: { "@id": person["@id"] } };
+  return { "@context": "https://schema.org", "@graph": [page, person, ...code] };
+}
+
+function head(data: Portfolio): string {
+  const { name, headline } = data.profile;
+  const title = titleOf(data);
+  const description = need(headline, "profile.headline");
   return [
     `<title>${esc(title)}</title>`,
     `<meta name="description" content="${esc(description)}">`,
@@ -232,7 +276,7 @@ function head(data: Portfolio): string {
     `<meta property="og:image:height" content="630">`,
     `<meta property="og:image:alt" content="${esc(`${name}. ${headline}`)}">`,
     `<meta name="twitter:card" content="summary_large_image">`,
-    `<script type="application/ld+json">${JSON.stringify(person).replace(/</g, "\\u003c")}</script>`,
+    `<script type="application/ld+json">${JSON.stringify(structuredData(data)).replace(/</g, "\\u003c")}</script>`,
   ].join("\n");
 }
 
@@ -311,23 +355,21 @@ function body(data: Portfolio, sizes: Sizes, latest: Latest | null): string {
   const toc =
     `<nav aria-label="Projects"><details id="toc">` +
     `<summary>Projects (${data.projects.length})</summary>\n<ul>\n${[...tryLink, ...groups].join("\n")}\n</ul></details></nav>`;
-  // The profile README's banner, the dark one for a dark scheme. It spells the name, so the name is
-  // its alt and it is the heading; it is the first thing painted, so it is fetched first.
-  const name = need(prof.name, "profile.name");
+  // The profile README's banner, the dark one for a dark scheme, sits in the heading above its text
+  // (name and role), which is what search engines and screen readers read; so the banner's alt is
+  // empty. It is the first thing painted, so it is fetched first.
   const banner =
     `<picture><source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">` +
-    `<img class="banner" src="assets/banner-light.svg" alt="${esc(name)}" width="${BANNER.width}" height="${BANNER.height}" fetchpriority="high"></picture>`;
+    `<img class="banner" src="assets/banner-light.svg" alt="" width="${BANNER.width}" height="${BANNER.height}" fetchpriority="high"></picture>`;
   const ctas = [
     data.projects.some((p) => p.group === "flagship") ? `<a class="cta primary" href="#flagship">See the work</a>` : "",
     data.try.length ? `<a class="cta" href="#try">Try a demo</a>` : "",
   ].filter(Boolean);
-  // Joined into one line, as in the profile README; an empty field is skipped.
-  const facts = [need(prof.education, "profile.education"), prof.location, prof.availability].filter(Boolean);
   return [
     "<header>",
-    `<h1>${banner}</h1>`,
+    `<h1>${banner}<span class="role">${esc(titleOf(data))}</span></h1>`,
     `<p class="headline">${esc(prof.headline)}</p>`,
-    `<p>${esc(facts.join(" "))}</p>`,
+    `<p>${esc(factsOf(prof))}</p>`,
     ctas.length ? `<p class="ctas">${ctas.join(" ")}</p>` : "",
     `<ul class="links">\n${links.join("\n")}\n</ul>`,
     // In place from the first paint, so showing it shifts nothing; a noscript style in index.html
@@ -352,4 +394,55 @@ export function renderPage(template: string, data: Portfolio, sizes: Sizes, late
     if (!template.includes(marker)) throw new Error(`index.html has no ${marker} marker`);
   }
   return template.replace("<!--head-->", () => head(data)).replace("<!--body-->", () => body(data, sizes, latest));
+}
+
+// llms.txt (llmstxt.org): the page as Markdown for language models, from the same content.
+function llms(data: Portfolio): string {
+  const item = (text: string, url: string, note?: string | null) => `- [${text}](${https(url)})${note ? `: ${note}` : ""}`;
+  const linkedin = need(data.links.find((l) => l.label === "LinkedIn"), "a LinkedIn link");
+  const projects = (groups: string[]) =>
+    data.projects.filter((p) => groups.includes(p.group)).map((p) => item(p.title, p.urls.repo, `${p.card} (${p.byline})`));
+  return [
+    `# ${titleOf(data)}`,
+    "",
+    `> ${data.profile.headline}`,
+    "",
+    factsOf(data.profile),
+    "",
+    `To get in touch, use [LinkedIn](${https(linkedin.url)}). The page ${SITE} has every project below, with figures quoted from each project's README and a link to their source.`,
+    "",
+    `## ${HEADINGS.flagship}`,
+    "",
+    ...projects(["flagship"]),
+    "",
+    "## Try it",
+    "",
+    ...data.try.map((t) => item(t.name, t.url, `${t.kind}. ${t.see}`)),
+    "",
+    "## Links",
+    "",
+    ...data.links.filter((l) => !isSite(l.url)).map((l) => item(l.label, l.url)),
+    "",
+    "## Optional",
+    "",
+    ...projects(Object.keys(HEADINGS).filter((g) => g !== "flagship")),
+    "",
+  ].join("\n");
+}
+
+// Files served beside the page for crawlers: robots.txt lets every one in, the sitemap lists the
+// page and the files it links to on this site (the CV), and llms.txt is above.
+export function crawlerFiles(data: Portfolio): Record<string, string> {
+  const served = [SITE, ...data.links.filter((l) => l.url.startsWith(SITE)).map((l) => l.url)];
+  return {
+    "robots.txt": [...["*", ...AI_CRAWLERS].map((a) => `User-agent: ${a}`), "Allow: /", "", `Sitemap: ${SITE}sitemap.xml`, ""].join("\n"),
+    "sitemap.xml": [
+      `<?xml version="1.0" encoding="UTF-8"?>`,
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+      ...served.map((u) => `<url><loc>${href(u)}</loc></url>`),
+      `</urlset>`,
+      "",
+    ].join("\n"),
+    "llms.txt": llms(data),
+  };
 }
