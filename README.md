@@ -14,6 +14,8 @@ The "Latest" strip in the header is fetched at build time, not stored: the newes
 
 For search engines and AI agents, the build also writes, from the same content file: the heading as text (name and role, under the banner); JSON-LD with a `ProfilePage` about the `Person` (university, country, topics, profiles) and the selected projects as `SoftwareSourceCode`; `robots.txt`, which lets every crawler in, AI crawlers named; `sitemap.xml`; and [`llms.txt`](https://llmstxt.org/), the page as Markdown. No hidden text: everything a crawler reads is on the page.
 
+`public/google1121c70e2b718f7d.html` verifies the site in Google Search Console: keep it, or the site loses its verification (a test checks it is served). Lighthouse audits only the page, not that file (`url` in `lighthouserc.json`).
+
 ## Commands
 
 Node 24 (`.nvmrc`).
