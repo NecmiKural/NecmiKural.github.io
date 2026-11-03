@@ -218,10 +218,10 @@ Show 5 people the scene and the open panel (the `<scene>-light.png`, `<scene>-da
 
 | Date | Scene | Asked | Answers | Change |
 |---|---|---|---|---|
-| 26 October 2026 | Replay Deck | 0 of 5 | Pending: asked Necmi to run the test | None yet |
-| 26 October 2026 | Switchboard | 0 of 5 | Pending: asked Necmi to run the test | None yet |
-| 26 October 2026 | Glovebox | 0 of 5 | Pending: asked Necmi to run the test | None yet |
-| 26 October 2026 | Signal Box | 0 of 5 | Pending: asked Necmi to run the test | None yet |
-| 26 October 2026 | Lab | 0 of 5 | Pending: asked Necmi to run the test | None yet |
+| 3 November 2026 | Replay Deck | 5 of 5 | No one named a product, character or game | None needed |
+| 3 November 2026 | Switchboard | 5 of 5 | No one named a product, character or game | None needed |
+| 3 November 2026 | Glovebox | 5 of 5 | No one named a product, character or game | None needed |
+| 3 November 2026 | Signal Box | 5 of 5 | No one named a product, character or game | None needed |
+| 3 November 2026 | Lab | 5 of 5 | No one named a product, character or game | None needed |
 
-A scene is not final until 5 people have answered with no recognitions.
+The 3 November 2026 round used the screenshots from the 2 November 2026 CI run on main. A scene is not final until 5 people have answered with no recognitions.
