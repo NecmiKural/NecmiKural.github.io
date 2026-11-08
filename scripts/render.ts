@@ -76,10 +76,12 @@ export interface Portfolio {
   projects: Project[];
   try: TryItem[];
 }
-// The newest release across the shown repos and the newest update to a Space or dataset in "Try
-// it", fetched at build time (scripts/latest.ts). Null when a fetch failed: the strip is left out.
+// The newest release and commit across the shown repos and the newest update to a Space or dataset
+// in "Try it", fetched at build time (scripts/latest.ts). Null when a fetch failed: the strip is
+// left out.
 export interface Latest {
   release: { repo: string; tag: string; url: string; date: string };
+  commit: { repo: string; url: string; date: string };
   update: { name: string; kind: string; url: string; date: string };
 }
 // Each visual as served from public/visuals, by its URL: its file, its size, and for a moving
@@ -289,10 +291,13 @@ function when(iso: string): string {
 
 export function latestStrip(latest: Latest | null): string {
   if (!latest) return "";
-  const { release: r, update: u } = latest;
+  const { release: r, commit: c, update: u } = latest;
+  // A commit to the released repo on the release's own day is the release, near enough.
+  const sameDay = c.repo === r.repo && DAY.format(new Date(c.date)) === DAY.format(new Date(r.date));
   return (
     `<p class="latest"><span class="label">Latest</span>` +
     ` <span>Release <a href="${href(r.url)}">${esc(r.tag)}</a> of ${esc(r.repo)}, ${when(r.date)}</span>` +
+    (sameDay ? "" : ` <span>Commit to <a href="${href(c.url)}">${esc(c.repo)}</a>, ${when(c.date)}</span>`) +
     ` <span>${esc(u.kind)} <a href="${href(u.url)}">${esc(u.name)}</a> updated ${when(u.date)}</span></p>`
   );
 }

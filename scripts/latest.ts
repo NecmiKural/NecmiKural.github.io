@@ -1,6 +1,6 @@
-// The "Latest" strip's data, fetched at build time: the newest release across the shown
-// NecmiKural repos (GitHub API; CI passes the Actions token) and the newest update to a Space or
-// dataset listed in "Try it" (Hugging Face API). Any failed request throws, so the build leaves
+// The "Latest" strip's data, fetched at build time: the newest release and the newest commit to a
+// default branch across the shown NecmiKural repos (GitHub API; CI passes the Actions token), and
+// the newest update to a Space or dataset listed in "Try it" (Hugging Face API). Any failed request throws, so the build leaves
 // the strip out instead of showing a guess; a repo without a release is not a failure.
 
 import type { Latest, Portfolio } from "./render.ts";
@@ -52,6 +52,13 @@ export async function fetchLatest(data: Portfolio, get: Get = fetch, token = pro
       return [{ repo: repo.split("/")[1], tag: r.tag_name, url: r.html_url, date: date(r.published_at, repo) }];
     }),
   );
+  const committing = Promise.all(
+    repos.map(async (repo) => {
+      const c = (await json(`https://api.github.com/repos/${repo}/commits?per_page=1`, github))?.[0];
+      if (!String(c?.html_url).startsWith(`https://github.com/${repo}/commit/`)) throw new Error(`${repo}: unexpected commit`);
+      return { repo: repo.split("/")[1], url: c.html_url as string, date: date(c.commit?.committer?.date, repo) };
+    }),
+  );
   const updating = Promise.all(
     data.try.flatMap((t) => {
       const m = t.url.match(HUB_ITEM);
@@ -66,8 +73,15 @@ export async function fetchLatest(data: Portfolio, get: Get = fetch, token = pro
       ];
     }),
   );
-  const [releases, updates] = await Promise.all([releasing, updating]);
+  const [releases, commits, updates] = await Promise.all([releasing, committing, updating]);
   const release = newest(releases.flat());
+  const commit = newest(commits);
   const update = newest(updates);
-  return release && update ? { release, update } : null;
+  return release && commit && update ? { release, commit, update } : null;
+}
+
+// For the hourly poll in CI (scripts/poll-latest.ts): the live page needs a rebuild exactly when
+// its strip differs from a freshly fetched one, including when it has none.
+export function isStale(liveHtml: string, fresh: string): boolean {
+  return (liveHtml.match(/<p class="latest">[\s\S]*?<\/p>/)?.[0] ?? "") !== fresh;
 }
