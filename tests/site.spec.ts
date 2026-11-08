@@ -385,3 +385,31 @@ for (const { width, height } of VIEWPORTS) {
     });
   }
 }
+
+test.describe("WebMCP", () => {
+  test("where the browser offers document.modelContext, the page registers its read-only tools", async ({ page }) => {
+    await page.addInitScript(() => {
+      const tools: { name: string; execute: (input: object) => Promise<unknown> }[] = [];
+      Object.defineProperty(document, "modelContext", { value: { registerTool: async (t: (typeof tools)[number]) => void tools.push(t) } });
+      Object.assign(window, { registered: tools });
+    });
+    await page.goto("/");
+    const names = () => page.evaluate(() => (window as unknown as { registered: { name: string }[] }).registered.map((t) => t.name));
+    await expect.poll(names).toEqual(["portfolio.getProfile", "portfolio.listProjects", "portfolio.getProject"]);
+    const p = data.projects[0];
+    const answer = await page.evaluate(
+      (id) => (window as unknown as { registered: { execute: (i: object) => Promise<{ title: string; claims: { text: string }[] }> }[] }).registered[2].execute({ id }),
+      p.id,
+    );
+    expect(answer.title).toBe(p.title);
+    expect(answer.claims.map((c) => c.text)).toEqual(p.claims.map((c) => c.text));
+  });
+
+  test("elsewhere the page loads nothing for it", async ({ page }) => {
+    const asked: string[] = [];
+    page.on("request", (r) => asked.push(r.url()));
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    expect(asked.filter((u) => u.includes("webmcp"))).toEqual([]);
+  });
+});

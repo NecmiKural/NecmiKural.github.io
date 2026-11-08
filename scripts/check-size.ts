@@ -21,7 +21,13 @@ if (js > 2 * KB) problems.push(`entry JS is ${js} B gzip, over 2 KB`);
 // 3D mode with one scene: every other chunk (the engine with three, shared code) plus that scene's
 // own chunk, named after its file in src/scenes. 180 KB gzip is the target, 200 KB the limit.
 const entry = new Set(scripts.map((src) => basename(src)));
-const chunks = readdirSync("dist/assets").filter((f) => f.endsWith(".js") && !entry.has(f));
+// The WebMCP chunk loads only where the browser offers the API, never with 3D mode: its own budget.
+const isWebmcp = (f: string) => f.startsWith("webmcp-");
+const webmcp = readdirSync("dist/assets").filter((f) => f.endsWith(".js") && isWebmcp(f));
+const webmcpSize = webmcp.reduce((sum, c) => sum + gz(readFileSync(`dist/assets/${c}`)), 0);
+if (webmcp.length !== 1) problems.push(`expected one WebMCP chunk, found ${webmcp.length}`);
+if (webmcpSize > 16 * KB) problems.push(`the WebMCP chunk is ${webmcpSize} B gzip, over 16 KB`);
+const chunks = readdirSync("dist/assets").filter((f) => f.endsWith(".js") && !entry.has(f) && !isWebmcp(f));
 const scenes = readdirSync("src/scenes").filter((f) => f.endsWith(".ts")).map((f) => f.slice(0, -3));
 const sceneOf = (chunk: string) => scenes.find((s) => chunk.startsWith(`${s}-`));
 const modes = scenes.map((scene) => {
@@ -46,7 +52,7 @@ if (w !== 1200 || h !== 630) problems.push(`og.png is ${w}x${h}, not 1200x630`);
 
 for (const p of problems) console.error(p);
 console.log(
-  `check-size: index.html ${gz(html)} B gzip, entry JS ${js} B gzip, 3D mode (${modes.join(", ")}) gzip,` +
+  `check-size: index.html ${gz(html)} B gzip, entry JS ${js} B gzip, 3D mode (${modes.join(", ")}) gzip, WebMCP ${webmcpSize} B gzip,` +
     ` visuals ${visuals.length} files ${allVisuals} B, og.png ${w}x${h}`,
 );
 process.exit(problems.length ? 1 : 0);
