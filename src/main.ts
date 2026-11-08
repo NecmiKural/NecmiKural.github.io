@@ -1,6 +1,18 @@
 // The only script on page load. On a click of "Open in 3D" it checks for WebGL 2 and loads 3D
-// mode; without a click it downloads nothing else. It also opens the project list on wide screens
-// and marks the project being read in it.
+// mode; without a click it downloads nothing else, unless the browser offers WebMCP. It also opens
+// the project list on wide screens and marks the project being read in it.
+
+import type { ModelContext } from "./webmcp.ts";
+
+// WebMCP, an experimental browser API: where it is offered, the page registers read-only tools that
+// answer from its content (scripts/webmcp.ts). navigator.modelContext is the API's older place.
+type Offers = { modelContext?: ModelContext };
+const context = (document as Offers).modelContext ?? (navigator as Offers).modelContext;
+if (context) {
+  import("./webmcp.ts")
+    .then((m) => m.register(context))
+    .catch((e) => console.warn("WebMCP tools were not registered:", e));
+}
 
 const power = document.getElementById("power");
 const line = document.getElementById("power-status");

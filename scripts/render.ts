@@ -43,6 +43,7 @@ export interface Project {
   group: string;
   label?: string;
   ref?: string;
+  short: string;
   card: string;
   stack: string[];
   byline: string;
@@ -225,7 +226,7 @@ const titleOf = (data: Portfolio): string => `${need(data.profile.name, "profile
 
 // Education, location and availability, joined into one line as in the profile README; an empty
 // field is skipped.
-const factsOf = (prof: Portfolio["profile"]): string =>
+export const factsOf = (prof: Portfolio["profile"]): string =>
   [need(prof.education, "profile.education"), prof.location, prof.availability].filter(Boolean).join(" ");
 
 // schema.org JSON-LD: the page is a profile page about the person, who wrote the selected projects.
