@@ -85,3 +85,15 @@ test("every answer is plain JSON, as the browser serialises it", async () => {
     assert.deepEqual(JSON.parse(JSON.stringify(r)), r);
   }
 });
+
+test("the page carries a live WebMCP origin-trial token for this site", () => {
+  const html = readFileSync("index.html", "utf8");
+  const token = html.match(/<meta http-equiv="origin-trial" content="([^"]+)">/)?.[1];
+  assert.ok(token, "index.html has an origin-trial meta tag");
+  // A token is a version byte, a 64-byte signature, a 4-byte length, then the JSON payload.
+  const payload = JSON.parse(Buffer.from(token, "base64").subarray(69).toString());
+  assert.equal(payload.origin, "https://necmikural.github.io:443");
+  assert.equal(payload.feature, "WebMCP");
+  // Fails once the token has expired: renew it at https://developer.chrome.com/origintrials.
+  assert.ok(payload.expiry * 1000 > Date.now(), `the token expired on ${new Date(payload.expiry * 1000).toISOString()}`);
+});
