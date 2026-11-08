@@ -10,7 +10,9 @@ Do not edit the copies. Change the TOML in that repo, run its build, push, then 
 
 Project visuals (the flagship demos, app screenshots, crossfade's demo GIF, charts and figures from the other repos; a project may have several, and portrait screenshots sit side by side) are real outputs, fetched at build time from their repos at a pinned commit and served from this site, each with its size, alt text and caption. A GIF is served as a still of its first frame, cut at build time; with JavaScript it plays on its own, unless the visitor asks for less motion, and a button stops it and plays it again. Without JavaScript the still stays. On the page a visual rises into place as it scrolls into view, and in the 3D panel as the panel opens; neither moves with reduced motion or in print.
 
-The "Latest" strip in the header is fetched at build time, not stored: the newest release across the shown NecmiKural repos (GitHub API, with the Actions token in CI) and the newest update to a Space or dataset in "Try it" (Hugging Face API), each with its date. If any request fails, the build leaves the strip out and logs why; it never shows a guess.
+The "Latest" strip in the header is fetched at build time, not stored: the newest release and the newest commit to a default branch across the shown NecmiKural repos (GitHub API, with the Actions token in CI), and the newest update to a Space or dataset in "Try it" (Hugging Face API), each with its date. A commit to the released repo on the release's own day is left out, since it says nothing new. If any request fails, the build leaves the strip out and logs why; it never shows a guess.
+
+The strip follows the repos without a token in each of them: every hour a small `poll` job (`scripts/poll-latest.ts`, no `npm ci`) fetches a fresh strip and compares it with the live page, and only when they differ do the check, deploy and Space jobs run. So a release or a push to a shown repo reaches the page within about an hour plus one build. GitHub turns off scheduled workflows in a public repo after 60 days with no commits; it sends an email first, and one push turns them back on.
 
 For search engines and AI agents, the build also writes, from the same content file: the heading as text (name and role, under the banner); JSON-LD with a `ProfilePage` about the `Person` (university, country, topics, profiles) and the selected projects as `SoftwareSourceCode`; `robots.txt`, which lets every crawler in, AI crawlers named; `sitemap.xml`; and [`llms.txt`](https://llmstxt.org/), the page as Markdown. No hidden text: everything a crawler reads is on the page.
 
@@ -53,7 +55,7 @@ On every push, pull request and weekly:
 - Lighthouse mobile: Performance 95 or more, Accessibility, Best Practices and SEO 100;
 - lychee finds no broken links (LinkedIn is skipped because it blocks bots).
 
-On a push to `main`, and on the weekly run (which refreshes the "Latest" strip), the `deploy` job publishes `dist/` to GitHub Pages, and the `space` job uploads the same files to the Space. That job skips its steps until `HF_TOKEN` exists in the `hugging-face` environment. To turn it on:
+On a push to `main`, on the weekly run, and on an hourly run whose poll found the "Latest" strip out of date, the `deploy` job publishes `dist/` to GitHub Pages, and the `space` job uploads the same files to the Space. That job skips its steps until `HF_TOKEN` exists in the `hugging-face` environment. To turn it on:
 1. Create the static Space `necmikural/portfolio` on Hugging Face.
 2. Create a fine-grained token with write access to that Space only.
 3. Add it: `gh secret set HF_TOKEN --env hugging-face -R NecmiKural/NecmiKural.github.io`.

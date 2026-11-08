@@ -277,15 +277,20 @@ test.describe("the hero, Try it and Latest", () => {
     test.skip(existsSync(LEFT_OUT), `the build left the strip out: ${existsSync(LEFT_OUT) ? readFileSync(LEFT_OUT, "utf8") : ""}`);
     const strip = page.locator("p.latest");
     await expect(strip).toHaveCount(1);
+    // Release, commit and Hub update; the commit is left out on the release's own day and repo.
     const times = strip.locator("time");
-    await expect(times).toHaveCount(2);
+    expect([2, 3]).toContain(await times.count());
     for (const time of await times.all()) {
       const iso = (await time.getAttribute("datetime")) as string;
       expect(Date.parse(iso)).toBeLessThanOrEqual(Date.now());
       await expect(time).toHaveText(DAY.format(new Date(iso)));
     }
-    const [release, update] = await strip.locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    const links = await strip.locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    expect(links).toHaveLength(await times.count());
+    const [release, ...rest] = links;
+    const update = rest.pop();
     expect(release).toMatch(/^https:\/\/github\.com\/NecmiKural\/[\w.-]+\/releases\/tag\//);
+    for (const commit of rest) expect(commit).toMatch(/^https:\/\/github\.com\/NecmiKural\/[\w.-]+\/commit\/[0-9a-f]{40}$/);
     expect(data.try.map((t) => t.url)).toContain(update);
   });
 });
